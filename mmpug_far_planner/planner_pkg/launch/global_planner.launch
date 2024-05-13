@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+
+<launch>
+    
+    <arg name="debug" default="false"/>
+    <arg name="ros_rate_planner" default="5.0"/>
+    <arg name="config_file" default="$(find planner_pkg)/config/planner_config.yaml"/>
+    
+
+    <node pkg="planner_pkg" type="grid_planner" name="planner" output="screen" >
+        <rosparam command="load" file="$(arg config_file)" />
+            <param name="ros_rate" type="double" value="$(arg ros_rate_planner)"/>
+    </node>
+
+</launch>

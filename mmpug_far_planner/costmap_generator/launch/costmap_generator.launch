@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+
+<launch>
+    
+    <arg name="debug" default="false"/>
+    <arg name="system_id" default="rc1" />
+    <arg name="ros_rate_terrain" default="5.0"/>
+    <arg name="config_file" default="$(find costmap_generator)/config/costmap_gen_config.yaml"/>
+    
+
+    <node pkg="costmap_generator" type="costmap_generator" name="costmap_gen" output="screen">
+        <rosparam command="load" file="$(arg config_file)" />
+        <param name="debug" type="bool" value="$(arg debug)" />
+        <param name="ros_rate" type="double" value="$(arg ros_rate_terrain)"/>
+        <param name="robot_name" type="string" value="$(arg system_id)"/>
+    </node>
+
+</launch>

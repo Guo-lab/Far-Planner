@@ -1,0 +1,15 @@
+---
+
+# Planner Configs
+
+costmap_topic: "/terrain/occupancy_grid"
+global_frame_id: "global"
+planner_service_topic: "/global_planner/plan"
+system_id: "cmu_rc1"
+
+occupied_min_value: 100
+scanVoxelSize: 0.15
+plannerMapSize: 1000
+publish_global_grid: true
+
+
