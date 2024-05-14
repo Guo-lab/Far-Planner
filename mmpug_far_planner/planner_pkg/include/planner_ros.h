@@ -29,9 +29,10 @@ class PlannerNode {
         PlannerNode();
         ~PlannerNode();
         void Run();
-
+        // The Buffer is used to call LookupTransform function
+        // do the transformation between the global frame and the frame receiving occupancy grid msg
+        // tfBuffer is a pointer to a tf2_ros::Buffer object
         tf2_ros::Buffer *tfBuffer;
-        tf2_ros::TransformListener *tfListener;
 
     private:
         // ROS Node Handlers

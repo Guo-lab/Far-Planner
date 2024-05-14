@@ -23,7 +23,6 @@
 struct Node {
     int key, time;
     int x, y, theta;
-
     float g, h, f;
     std::shared_ptr<Node> parent;
 
@@ -36,8 +35,7 @@ struct Node {
 
 // Less than operator for priority queue
 struct CompareFValues {
-    bool operator()(std::shared_ptr<Node>  n1, std::shared_ptr<Node>  n2)
-    {
+    bool operator()(std::shared_ptr<Node> n1, std::shared_ptr<Node> n2) {
         return n1->f > n2->f;
     }
 };
@@ -45,8 +43,7 @@ struct CompareFValues {
 
 typedef std::shared_ptr<Node> Nodeptr;
 
-//Defining a custom closed list of type unordered_map
-// To Store visited nodes.
+//Defining a custom closed list of type unordered_map to Store visited nodes.
 typedef std::unordered_map<int, Nodeptr> CLOSED_LIST; 
 
 //Defining an open list of type priority queue
@@ -54,28 +51,24 @@ typedef std::priority_queue<Nodeptr, std::vector<Nodeptr>, CompareFValues> OPEN_
 
 
 
-
-class GridPlanner{
+class GridPlanner {
     public:
         GridPlanner(int map_size, float map_resolution, int min_obs_cost);
         GridPlanner(){};
         ~GridPlanner();
         
         int naivePlanner(const geometry_msgs::Pose& robot_pose, const geometry_msgs::Pose& target, geometry_msgs::PoseArray& plan);
-        
         void updateMap(const nav_msgs::OccupancyGrid& grid, geometry_msgs::Point& corner1);
-
-        void printInfo();
         void getMap(std::vector<int8_t>& map_data);
-
+        void printInfo();
+        
         int states_expanded;
+
     private:
         int x_size, y_size, x_offset, y_offset;
-        
+        int max_steps;        
         float map_resolution;
-        int max_steps;
         float obstacle_cost;
-        
         float robot_z;
         bool goal_updated;
         
@@ -83,7 +76,6 @@ class GridPlanner{
         int dY[8] = {-1,  0,  1, -1,  1, -1, 0, 1};
 
         Node start_node, goal_node;
-        geometry_msgs::Pose2D robot_pose, goal_loc;
 
         std::vector<int8_t, std::allocator<int8_t>> map;
 

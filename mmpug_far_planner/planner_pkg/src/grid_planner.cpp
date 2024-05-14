@@ -2,8 +2,9 @@
 
 using namespace std;
 
+
 /* GridPlanner constructor */
-GridPlanner::GridPlanner(int map_size, float map_resolution, int min_obs_cost){
+GridPlanner::GridPlanner(int map_size, float map_resolution, int min_obs_cost) {
     goal_updated = false;
     
     this->obstacle_cost = min_obs_cost;
@@ -22,21 +23,20 @@ GridPlanner::GridPlanner(int map_size, float map_resolution, int min_obs_cost){
 GridPlanner::~GridPlanner(){}
 
 
-inline int GridPlanner::computeKey(int x, int y){
+inline int GridPlanner::computeKey(int x, int y) { 
+    return (y*y_size + x); 
+}
+
+inline int GridPlanner::getMapIndex(int x, int y) {
     return (y*y_size + x);
 }
 
-inline int GridPlanner::getMapIndex(int x, int y){
-    return (y*y_size + x);
-}
 
-
-// ======================= Distance ============================
 /**
  * @brief Function to estimate the octile distance between two points
  *      dx + dy - min(dx, dy)
 */
-float GridPlanner::estimateOctileDistance(int curr_x, int curr_y, int goal_x, int goal_y){
+float GridPlanner::estimateOctileDistance(int curr_x, int curr_y, int goal_x, int goal_y) {
     int delta_x = abs(curr_x - goal_x);
     int delta_y = abs(curr_y - goal_y);
     return delta_x + delta_y - MIN(delta_x,delta_y);
@@ -46,92 +46,57 @@ float GridPlanner::estimateOctileDistance(int curr_x, int curr_y, int goal_x, in
  * @brief Function to estimate the euclidean distance between two points
  *     sqrt(dx^2 + dy^2)
 */
-float GridPlanner::estimateEuclideanDistance(int curr_x, int curr_y, int goal_x, int goal_y){
+float GridPlanner::estimateEuclideanDistance(int curr_x, int curr_y, int goal_x, int goal_y) {
     int delta_x = abs(curr_x - goal_x);
     int delta_y = abs(curr_y - goal_y);
     return sqrt(delta_x*delta_x + delta_y*delta_y);
 }
 
 
-/**
- * @brief Function to update the map.
-*/
-void GridPlanner::updateMap(const nav_msgs::OccupancyGrid& grid, geometry_msgs::Point& corner1){
-    int x1, y1;
+void GridPlanner::getMap(std::vector<int8_t>& map_data) {
+    map_data = this->map;
+}
 
-    for(int i = 2; i < grid.info.width - 3; i++){
+/**
+    * @brief Function to update the map with the new occupancy grid data,
+    *      according to the corner of the map in the global frame
+    * Only when it is needed to publish with getMap()
+    */
+void GridPlanner::updateMap(const nav_msgs::OccupancyGrid& grid, geometry_msgs::Point& corner1) {
+    int x1, y1;
+    for(int i = 2; i < grid.info.width - 3; i++)
         for(int j = 2; j < grid.info.height - 3 ; j++){
 
             x1 = std::floor(corner1.x/map_resolution) - x_offset;
             y1 = std::floor(corner1.y/map_resolution) - y_offset;
 
-            if((x1 + i) >= 0 && (x1 + i) < x_size && (y1 + j) >= 0 && (y1 + j) < y_size ){
-                if(this->map[(x1 + i) + ((y1 + j) * y_size)] == obstacle_cost/2){
-                    this->map[(x1 + i) + ((y1 + j) * y_size)] = (int8_t) grid.data.at(i + (j * grid.info.height));
-                }
-                else{
-                    if(grid.data.at(i + (j * grid.info.height)) != obstacle_cost/2){
-                        this->map[(x1 + i) + ((y1 + j) * y_size)] = (int8_t) grid.data.at(i + (j * grid.info.height));
+            if((x1 + i) >= 0 && (x1 + i) < x_size && (y1 + j) >= 0 && (y1 + j) < y_size ) {
+                if(this->map[(x1 + i) + ((y1 + j) * y_size)] == obstacle_cost/2) { 
+                    this->map[(x1 + i) + ((y1 + j) * y_size)] = \
+                        (int8_t) grid.data.at(i + (j * grid.info.height));
+                } else {
+                    if(grid.data.at(i + (j * grid.info.height)) != obstacle_cost/2) { 
+                        this->map[(x1 + i) + ((y1 + j) * y_size)] = \
+                            (int8_t) grid.data.at(i + (j * grid.info.height));
                     }
                 }
-               
             }
         }
-    }
-
 }
-
-void GridPlanner::getMap(std::vector<int8_t>& map_data){
-    map_data = this->map;
-}
-
-
-
-// void GridPlanner::updateMap(const nav_msgs::OccupancyGrid::ConstPtr& grid){
-//     map_resolution = grid->info.resolution;
-//     y_size = grid->info.width;
-//     x_size = grid->info.height;
-//     x_offset = (grid->info.origin.position.x)/(map_resolution);
-//     y_offset = (grid->info.origin.position.y)/(map_resolution);
-//     map.clear();
-//     map = grid->data;
-// }
 
 void GridPlanner::printInfo(){
-    ROS_INFO_STREAM(" Map size: " << map.size());
-    // ROS_INFO_STREAM("Robot Position: " <<  start_node.x << " " << start_node.y);
-    // ROS_INFO_STREAM("Goal Position: " <<  goal_locations[0].x << " " << goal_locations[0].y);
-
-    ROS_INFO_STREAM("x_offset: "<< x_offset <<" y_offset: " <<y_offset);
+    ROS_INFO_STREAM("Map size: " << map.size());
+    ROS_INFO_STREAM("Robot Position: " <<  start_node.x << " " << start_node.y);
+    ROS_INFO_STREAM("x_offset: " << x_offset << " y_offset: " << y_offset);
 }
-
-// void GridPlanner::updateGoalCells(){
-//     Node t1;
-//     t1.x = (goal_loc.x)/(map_resolution) - x_offset;
-//     t1.y = (goal_loc.y)/(map_resolution) - y_offset;
-//     t1.key = computeKey(t1.x, t1.y);
-//     goal_locations.clear();
-//     goal_locations.push_back(t1);   
-// }
-// bool GridPlanner::reachedGoal(std::shared_ptr<Node> curr_node){
-//     for(int i = 0; i < goal_locations.size(); i++){
-//         if(*curr_node == goal_locations[i])
-//             return true;
-//     }    
-//     return false;
-// }
-
 
 
 
 /**
  * @brief Function to plan in a naive way
 */
-int GridPlanner::naivePlanner(
-    const geometry_msgs::Pose& robot_pose, 
-    const geometry_msgs::Pose& target, 
-    geometry_msgs::PoseArray& plan) 
-{
+int GridPlanner::naivePlanner(const geometry_msgs::Pose& robot_pose, const geometry_msgs::Pose& target, 
+    geometry_msgs::PoseArray& plan) {
     
     start_node.x = robot_pose.position.x/map_resolution - x_offset;
     start_node.y = robot_pose.position.y/map_resolution - x_offset;
