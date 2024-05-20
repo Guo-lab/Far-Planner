@@ -48,7 +48,8 @@ class PlannerNode {
         ros::Publisher plan_publisher;
         ros::Publisher stats_pub;
         
-        void OccupancyGridHandler(const nav_msgs::OccupancyGrid::ConstPtr&);
+        // void OccupancyGridHandler(const nav_msgs::OccupancyGrid::ConstPtr&);
+        void CostmapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg);
         void plannerReqHandler(const geometry_msgs::PoseArray::ConstPtr&);
         void plannerCurrPoseHandler(const nav_msgs::Odometry::ConstPtr&);
         

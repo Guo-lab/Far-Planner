@@ -62,13 +62,14 @@ void GridPlanner::getMap(std::vector<int8_t>& map_data) {
     *      according to the corner of the map in the global frame
     * Only when it is needed to publish with getMap()
     */
-void GridPlanner::updateMap(const nav_msgs::OccupancyGrid& grid, geometry_msgs::Point& corner1) {
+void GridPlanner::updateMap(const nav_msgs::OccupancyGrid &grid, geometry_msgs::Point &origin_point) {
     int x1, y1;
+
     for(int i = 2; i < grid.info.width - 3; i++)
         for(int j = 2; j < grid.info.height - 3 ; j++){
 
-            x1 = std::floor(corner1.x/map_resolution) - x_offset;
-            y1 = std::floor(corner1.y/map_resolution) - y_offset;
+            x1 = std::floor(origin_point.x/map_resolution) - x_offset;
+            y1 = std::floor(origin_point.y/map_resolution) - y_offset;
 
             if((x1 + i) >= 0 && (x1 + i) < x_size && (y1 + j) >= 0 && (y1 + j) < y_size ) {
                 if(this->map[(x1 + i) + ((y1 + j) * y_size)] == obstacle_cost/2) { 

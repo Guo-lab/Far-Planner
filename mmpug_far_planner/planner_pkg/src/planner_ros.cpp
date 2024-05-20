@@ -24,6 +24,14 @@ PlannerNode::PlannerNode():nh(){
     p_nh.getParam("occupied_min_value", min_obstacle_cost);
     p_nh.getParam("publish_global_grid", publish_global_grid);
 
+    ROS_INFO_STREAM("Global Frame Id: " << global_frame_id);
+    ROS_INFO_STREAM("Planner Service Topic: " << planner_service_topic);
+    ROS_INFO_STREAM("Costmap Topic: " << costmap_topic);
+    ROS_INFO_STREAM("Map Resolution: " << map_resolution);
+    ROS_INFO_STREAM("Map Size: " << map_size);
+    ROS_INFO_STREAM("Min Obstacle Cost: " << min_obstacle_cost);
+    ROS_INFO_STREAM("Publish Global Grid: " << publish_global_grid);
+
     planner = GridPlanner(map_size, map_resolution, min_obstacle_cost);
 }
 /* PlannerNode destructor */
@@ -42,7 +50,8 @@ void PlannerNode::Run() {
 ROS_INFO("Global Planner Running");
 
     // Create ROS Subs
-    occupancy_grid_sub = nh.subscribe(costmap_topic, 1, &PlannerNode::OccupancyGridHandler, this);
+    // occupancy_grid_sub = nh.subscribe(costmap_topic, 1, &PlannerNode::OccupancyGridHandler, this);
+    costmap_sub = m_nh.subscribe("cmu_rc1/local_mapping_lidar_node/voxel_grid/obstacle_map", 1, &PlannerNode::CostmapCallback, this);
     waypoints_sub = nh.subscribe("cmu_rc1/command_interface/waypoint", 10, &PlannerNode::plannerReqHandler, this);
     current_pose_sub = nh.subscribe("cmu_rc1/odom_to_base_link", 1, &PlannerNode::plannerCurrPoseHandler, this);
     // Create ROS Pubs
@@ -84,18 +93,42 @@ ROS_INFO("Global Planner Running");
  * PlannerNode OccupancyGridHandler
  * @param msg: mmpug_msgs::MMPUGOccupancyMsg::ConstPtr&
 */
-void PlannerNode::OccupancyGridHandler(const nav_msgs::OccupancyGrid::ConstPtr& msg){
-ROS_INFO("Updating MAP For Planner ");
-    geometry_msgs::TransformStamped tfStamp = tfBuffer->lookupTransform(global_frame_id, msg->header.frame_id, ros::Time(0), ros::Duration(0.25));
+// void PlannerNode::OccupancyGridHandler(const nav_msgs::OccupancyGrid::ConstPtr& msg){
+// ROS_INFO("Updating MAP For Planner ");
+//     geometry_msgs::TransformStamped tfStamp = tfBuffer->lookupTransform(global_frame_id, msg->header.frame_id, ros::Time(0), ros::Duration(0.25));
     
-    // Compute 2 corners to iterate through the vector in global
-    // Assign msg->info.origin.position to p1 and init a p1t (the transformed origin got by doTransform())
-    geometry_msgs::Point p1 = msg->info.origin.position;
-    geometry_msgs::Point p1t;
-    tf2::doTransform(p1, p1t, tfStamp); // No need in new architecture
+//     // Compute 2 corners to iterate through the vector in global
+//     // Assign msg->info.origin.position to p1 and init a p1t (the transformed origin got by doTransform())
+//     geometry_msgs::Point p1 = msg->info.origin.position;
+//     geometry_msgs::Point p1t;
+//     tf2::doTransform(p1, p1t, tfStamp); // No need in new architecture
 
-    // Update the Map of Grid Planner (const nav_msgs::OccupancyGrid& grid, geometry_msgs::Point& corner1);
-    planner.updateMap(*msg, p1t);
+//     // Update the Map of Grid Planner (const nav_msgs::OccupancyGrid& grid, geometry_msgs::Point& corner1);
+//     planner.updateMap(*msg, p1t);
+//     initialized_map = true;
+// }
+void PlannerNode::CostmapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg) {
+ROS_INFO("Updating Cost MAP For Planner");
+
+    // geometry_msgs::TransformStamped tfStamp = tfBuffer->lookupTransform(global_frame_id, msg->header.frame_id, ros::Time(0), ros::Duration(0.25));
+    // geometry_msgs::Point p1 = msg->info.origin.position;
+    // geometry_msgs::Point p1t;
+    // tf2::doTransform(p1, p1t, tfStamp); // No need in new architecture
+
+    // auto m_occupancyGrid = *msg;
+    // m_costmap = Costmap(m_occupancyGrid.info.origin.position.x,
+    //                     m_occupancyGrid.info.origin.position.y,
+    //                     m_occupancyGrid.info.resolution,
+    //                     m_occupancyGrid.info.width,
+    //                     m_occupancyGrid.info.height);
+    // for (auto &cell : m_occupancyGrid.data)
+    // {
+    //     m_costmap.data.push_back(static_cast<int>(cell));
+    // }
+
+    geometry_msgs::Point origin_point = msg->info.origin.position;
+    planner.updateMap(*msg, origin_point);
+    ROS_INFO_STREAM("Map updated: " << msg->info.resolution << " " << msg->info.width << " " << msg->info.height);
     initialized_map = true;
 }
 
