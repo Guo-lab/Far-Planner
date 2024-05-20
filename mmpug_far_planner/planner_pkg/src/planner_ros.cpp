@@ -51,11 +51,12 @@ ROS_INFO("Global Planner Running");
 
     // Create ROS Subs
     // occupancy_grid_sub = nh.subscribe(costmap_topic, 1, &PlannerNode::OccupancyGridHandler, this);
-    costmap_sub = m_nh.subscribe("cmu_rc1/local_mapping_lidar_node/voxel_grid/obstacle_map", 1, &PlannerNode::CostmapCallback, this);
+    costmap_sub = nh.subscribe("cmu_rc1/local_mapping_lidar_node/voxel_grid/obstacle_map", 1, &PlannerNode::CostmapCallback, this);
     waypoints_sub = nh.subscribe("cmu_rc1/command_interface/waypoint", 10, &PlannerNode::plannerReqHandler, this);
     current_pose_sub = nh.subscribe("cmu_rc1/odom_to_base_link", 1, &PlannerNode::plannerCurrPoseHandler, this);
     // Create ROS Pubs
     plan_publisher = nh.advertise<geometry_msgs::PoseArray>("cmu_rc1/mux/goal_input", 1, true);
+    global_cost_map_publisher = nh.advertise<nav_msgs::OccupancyGrid>("cmu_rc1/final_occ_grid", 1, true);
     
     tf2_ros::Buffer tfBuffer_;
     tfBuffer = &tfBuffer_;
@@ -83,6 +84,9 @@ ROS_INFO("Global Planner Running");
             new_occ_grid.info.origin.position.x = - map_resolution * map_size/2;
             new_occ_grid.info.origin.position.y = - map_resolution * map_size/2;
             new_occ_grid.header.stamp = ros::Time::now();
+
+            // Publish the occupancy grid data
+            global_cost_map_publisher.publish(new_occ_grid);
         }
         ros::spinOnce();
         rate.sleep();
@@ -129,6 +133,7 @@ ROS_INFO("Updating Cost MAP For Planner");
     geometry_msgs::Point origin_point = msg->info.origin.position;
     planner.updateMap(*msg, origin_point);
     ROS_INFO_STREAM("Map updated: " << msg->info.resolution << " " << msg->info.width << " " << msg->info.height);
+    ROS_INFO_STREAM("Origin: " << msg->info.origin.position.x << " " << msg->info.origin.position.y);
     initialized_map = true;
 }
 

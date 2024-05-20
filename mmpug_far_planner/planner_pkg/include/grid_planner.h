@@ -69,7 +69,6 @@ class GridPlanner {
         int max_steps;        
         float map_resolution;
         float obstacle_cost;
-        float robot_z;
         bool goal_updated;
         
         int dX[8] = {-1, -1, -1,  0,  0,  1, 1, 1};

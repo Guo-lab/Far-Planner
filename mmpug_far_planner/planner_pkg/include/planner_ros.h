@@ -43,10 +43,12 @@ class PlannerNode {
         ros::Subscriber occupancy_grid_sub;
         ros::Subscriber waypoints_sub;
         ros::Subscriber current_pose_sub;
+        ros::Subscriber costmap_sub;
 
         // ROS Publishers
         ros::Publisher plan_publisher;
         ros::Publisher stats_pub;
+        ros::Publisher global_cost_map_publisher;
         
         // void OccupancyGridHandler(const nav_msgs::OccupancyGrid::ConstPtr&);
         void CostmapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg);
