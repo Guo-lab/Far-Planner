@@ -11,6 +11,7 @@
 #include <std_msgs/Bool.h>
 #include <std_msgs/Float32.h>
 #include <nav_msgs/OccupancyGrid.h>
+#include <nav_msgs/Path.h>
 #include <visualization_msgs/Marker.h>
 
 #include "grid_planner.h"
@@ -49,7 +50,8 @@ class PlannerNode {
         ros::Publisher plan_publisher;
         ros::Publisher stats_pub;
         ros::Publisher global_cost_map_publisher;
-        
+        ros::Publisher path_to_goal_publisher;
+
         // void OccupancyGridHandler(const nav_msgs::OccupancyGrid::ConstPtr&);
         void CostmapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg);
         void plannerReqHandler(const geometry_msgs::PoseArray::ConstPtr&);
@@ -69,7 +71,8 @@ class PlannerNode {
         nav_msgs::OccupancyGrid new_occ_grid;
         /* Odometry data -> PoseWithCovariance -> Pose */
         nav_msgs::Odometry current_odom;
-        
+    
+
         bool initialized_map;
         bool init_robot_pose;
         bool init_targets;
