@@ -85,6 +85,7 @@ class GridPlanner {
         int getMapIndex(int, int);
 
         bool reachedGoal(std::shared_ptr<Node>);
+        bool isInMap(int x, int y);
 
         inline float wrap2PI(float angle){
             angle = fmod(angle, 2 * M_PI);

@@ -64,20 +64,26 @@ void GridPlanner::updateMap(const nav_msgs::OccupancyGrid& grid,
     for (int j = 2; j < grid.info.height - 3; j++) {
       x1 = std::floor(origin_point.x / map_resolution) - x_offset;
       y1 = std::floor(origin_point.y / map_resolution) - y_offset;
-
-      if ((x1 + i) >= 0 && (x1 + i) < x_size && (y1 + j) >= 0 &&
-          (y1 + j) < y_size) {
+      if (isInMap(x1 + i, y1 + j)) {
         if (this->map[(x1 + i) + ((y1 + j) * y_size)] == obstacle_cost / 2) {
           this->map[(x1 + i) + ((y1 + j) * y_size)] =
               (int8_t)grid.data.at(i + (j * grid.info.height));
         } else {
-          if (grid.data.at(i + (j * grid.info.height)) != obstacle_cost / 2) {
+          if (grid.data.at(i + (j * grid.info.height)) != obstacle_cost / 2 &&
+              grid.data.at(i + (j * grid.info.height)) != 0) {
+            if (grid.data.at(i + (j * grid.info.height)) > 0) {
+              ROS_INFO_STREAM("Updating map with Occup: " << (int8_t)grid.data.at(i + (j * grid.info.height)));
+            }
             this->map[(x1 + i) + ((y1 + j) * y_size)] =
                 (int8_t)grid.data.at(i + (j * grid.info.height));
           }
         }
       }
     }
+}
+
+bool GridPlanner::isInMap(int x, int y) {
+  return (x >= 0 && x < x_size && y >= 0 && y < y_size);
 }
 
 void GridPlanner::printInfo() {
