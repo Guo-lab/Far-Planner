@@ -2,39 +2,31 @@
  * @file planner_ros.cpp
  * @brief Planner ROS Node Implementation
  * @ref https://github.com/mmpug-archive/mmpug_far_planner/tree/ps/new_planner
+ * @author Siqi. Edward, Guo
+ * @version 1.0
  */
 #include "planner_ros.h"
 
-#include <fstream>
 
 /**
- * PlannerNode constructor. Base class: nh (Node Handle)
+ * PlannerNode constructor. 
  */
-PlannerNode::PlannerNode() : nh() {
+PlannerNode::PlannerNode() : node_handler() {
   initialized_map = false;
 
-  p_nh.getParam("ros_rate", ros_rate);
+  private_node_handler.getParam("ros_rate", ros_rate);
 
-  p_nh.getParam("global_frame_id", global_frame_id);
-  p_nh.getParam("planner_service_topic", planner_service_topic);
-  p_nh.getParam("costmap_topic", costmap_topic);
+  private_node_handler.getParam("global_frame_id", global_frame_id);
+  private_node_handler.getParam("planner_service_topic", planner_service_topic);
+  private_node_handler.getParam("costmap_topic", costmap_topic);
 
-  p_nh.getParam("scanVoxelSize", map_resolution);
-  p_nh.getParam("plannerMapSize", map_size);
-  p_nh.getParam("occupied_min_value", min_obstacle_cost);
-  p_nh.getParam("publish_global_grid", publish_global_grid);
-
-  ROS_INFO_STREAM("Global Frame Id: " << global_frame_id);
-  ROS_INFO_STREAM("Planner Service Topic: " << planner_service_topic);
-  ROS_INFO_STREAM("Costmap Topic: " << costmap_topic);
-  ROS_INFO_STREAM("Map Resolution: " << map_resolution);
-  ROS_INFO_STREAM("Map Size: " << map_size);
-  ROS_INFO_STREAM("Min Obstacle Cost: " << min_obstacle_cost);
-  ROS_INFO_STREAM("Publish Global Grid: " << publish_global_grid);
+  private_node_handler.getParam("scanVoxelSize", map_resolution);
+  private_node_handler.getParam("plannerMapSize", map_size);
+  private_node_handler.getParam("occupied_min_value", min_obstacle_cost);
+  private_node_handler.getParam("publish_global_grid", publish_global_grid);
 
   planner = GridPlanner(map_size, map_resolution, min_obstacle_cost);
 }
-/* PlannerNode destructor */
 PlannerNode::~PlannerNode() {}
 
 /**
@@ -49,43 +41,21 @@ PlannerNode::~PlannerNode() {}
 void PlannerNode::Run() {
   ROS_INFO("Global Planner Running");
 
-  // Create ROS Subs
-  // occupancy_grid_sub = nh.subscribe(costmap_topic, 1,
-  // &PlannerNode::OccupancyGridHandler, this);
-  costmap_sub =
-      nh.subscribe("cmu_rc1/local_mapping_lidar_node/voxel_grid/obstacle_map",
-                   1, &PlannerNode::CostmapCallback, this);
-  waypoints_sub = nh.subscribe("cmu_rc1/command_interface/waypoint", 10,
-                               &PlannerNode::plannerReqHandler, this);
-  current_pose_sub = nh.subscribe("cmu_rc1/odom_to_base_link", 1,
-                                  &PlannerNode::plannerCurrPoseHandler, this);
-  // Create ROS Pubs
-  plan_publisher =
-      nh.advertise<geometry_msgs::PoseArray>("cmu_rc1/mux/goal_input", 1, true);
-  global_cost_map_publisher =
-      nh.advertise<nav_msgs::OccupancyGrid>("cmu_rc1/final_occ_grid", 1, true);
-  path_to_goal_publisher =
-      nh.advertise<nav_msgs::Path>("cmu_rc1/path_to_goal", 1, true);
+  costmap_sub = node_handler.subscribe("cmu_rc1/local_mapping_lidar_node/voxel_grid/obstacle_map", 1, &PlannerNode::CostmapCallback, this);
+  waypoints_sub = node_handler.subscribe("cmu_rc1/command_interface/waypoint", 10, &PlannerNode::plannerReqHandler, this);
+  current_pose_sub = node_handler.subscribe("cmu_rc1/odom_to_base_link", 1, &PlannerNode::plannerCurrPoseHandler, this);
 
-  tf2_ros::Buffer tfBuffer_;
-  tfBuffer = &tfBuffer_;
+  plan_publisher = node_handler.advertise<geometry_msgs::PoseArray>("cmu_rc1/mux/goal_input", 1, true);
+  global_cost_map_publisher = node_handler.advertise<nav_msgs::OccupancyGrid>("cmu_rc1/final_occ_grid", 1, true);
+  path_to_goal_publisher = node_handler.advertise<nav_msgs::Path>("cmu_rc1/path_to_goal", 1, true);
 
   ros::spinOnce();
   ros::Rate rate(ros_rate);
 
   while (ros::ok()) {
-    // Checks if OccupancyGrid has been initialized and if publishing_global is
-    // enabled
     if (initialized_map && publish_global_grid) {
-      // Retrieve the occupancy grid data from the planner object,
-      // updates new_occ_grid map and its metadata,
-      /* <nav_msgs::OccupancyGrid> new_occ_grid
-          Header header
-          MapMetaData info
-          # The map data, in row-major order, starting with (0,0).  Occupancy
-          # probabilities are in the range [0,100].  Unknown is -1.
-          int8[] data (std::vector<int8_t>& map_data)
-      */
+      // Retrieves the occupancy grid data from the planner object, updates new_occ_grid map and its metadata,
+
       planner.getMap(new_occ_grid.data);
       new_occ_grid.header.frame_id = global_frame_id;
       new_occ_grid.info.resolution = map_resolution;
@@ -103,86 +73,34 @@ void PlannerNode::Run() {
   }
 }
 
+
 /**
- * PlannerNode OccupancyGridHandler
- * @param msg: mmpug_msgs::MMPUGOccupancyMsg::ConstPtr&
+ * @brief Callback function for updating the cost map used by the planner.
+ * 
+ * This function is called when a new occupancy grid message is received.
+ * It updates the cost map used by the planner with the new map data and origin point in local planner's map.
+ * 
+ * @param msg The received occupancy grid message.
  */
-// void PlannerNode::OccupancyGridHandler(const
-// nav_msgs::OccupancyGrid::ConstPtr& msg){ ROS_INFO("Updating MAP For Planner
-// ");
-//     geometry_msgs::TransformStamped tfStamp =
-//     tfBuffer->lookupTransform(global_frame_id, msg->header.frame_id,
-//     ros::Time(0), ros::Duration(0.25));
-
-//     // Compute 2 corners to iterate through the vector in global
-//     // Assign msg->info.origin.position to p1 and init a p1t (the transformed
-//     origin got by doTransform()) geometry_msgs::Point p1 =
-//     msg->info.origin.position; geometry_msgs::Point p1t; tf2::doTransform(p1,
-//     p1t, tfStamp); // No need in new architecture
-
-//     // Update the Map of Grid Planner (const nav_msgs::OccupancyGrid& grid,
-//     geometry_msgs::Point& corner1); planner.updateMap(*msg, p1t);
-//     initialized_map = true;
-// }
-void PlannerNode::CostmapCallback(
-    const nav_msgs::OccupancyGrid::ConstPtr& msg) {
+void PlannerNode::CostmapCallback(const nav_msgs::OccupancyGrid::ConstPtr& msg) {
   ROS_INFO("Updating Cost MAP For Planner");
-
-  // geometry_msgs::TransformStamped tfStamp =
-  // tfBuffer->lookupTransform(global_frame_id, msg->header.frame_id,
-  // ros::Time(0), ros::Duration(0.25)); geometry_msgs::Point p1 =
-  // msg->info.origin.position; geometry_msgs::Point p1t; tf2::doTransform(p1,
-  // p1t, tfStamp); // No need in new architecture
-
-  // auto m_occupancyGrid = *msg;
-  // m_costmap = Costmap(m_occupancyGrid.info.origin.position.x,
-  //                     m_occupancyGrid.info.origin.position.y,
-  //                     m_occupancyGrid.info.resolution,
-  //                     m_occupancyGrid.info.width,
-  //                     m_occupancyGrid.info.height);
-  // for (auto &cell : m_occupancyGrid.data)
-  // {
-  //     m_costmap.data.push_back(static_cast<int>(cell));
-  // }
-
   geometry_msgs::Point origin_point = msg->info.origin.position;
   planner.updateMap(*msg, origin_point);
-  ROS_INFO_STREAM("Map updated: " << msg->info.resolution << " "
-                                  << msg->info.width << " "
-                                  << msg->info.height);
-  ROS_INFO_STREAM("Origin: " << msg->info.origin.position.x << " "
-                             << msg->info.origin.position.y);
   initialized_map = true;
 }
 
 /**
  * PlannerNode plannerReqHandler
  */
-void PlannerNode::plannerReqHandler(
-    const geometry_msgs::PoseArray::ConstPtr&
-        req) {  // former PoseStamped::ConstPtr& req
+void PlannerNode::plannerReqHandler(const geometry_msgs::PoseArray::ConstPtr& req) {
   geometry_msgs::PoseArray plan;
-
-  for (auto each_pose : req->poses) {
-    ROS_INFO_STREAM("Received pose: " << each_pose);
-  }
-  // geometry_msgs::Pose robot_pose = req->poses[0];
   geometry_msgs::Pose robot_pose = current_odom.pose.pose;
-  ROS_INFO_STREAM("Robot pose: " << robot_pose);
 
-  // naivePlanner based on request, computed a plan for the robot's path.
   ros::Time s1 = ros::Time::now();
-  int planLength =
-      planner.naivePlanner(robot_pose, req->poses[req->poses.size() - 1], plan);
+  int planLength = planner.naivePlanner(robot_pose, req->poses[req->poses.size() - 1], plan);
   ros::Time s2 = ros::Time::now();
   ros::Duration d = s2 - s1;
   ROS_INFO_STREAM("Planning routine complete. Time taken: " << d.toSec());
-
-  ROS_INFO_STREAM("Plan length: " << planLength);
-  ROS_INFO_STREAM("Frame Id: " << plan.header.frame_id);
-  for (auto each_pose : plan.poses) {
-    ROS_INFO_STREAM("Plan pose: " << each_pose);
-  }
 
   plan.header.frame_id = "global";
   plan.header.stamp = ros::Time::now();
@@ -201,24 +119,37 @@ void PlannerNode::plannerReqHandler(
     }
     path_to_goal_publisher.publish(path_to_goal);
 
-  } else {
-    ROS_INFO("Plan failed");
-  }
-}
-
-void PlannerNode::plannerCurrPoseHandler(
-    const nav_msgs::Odometry::ConstPtr& msg) {
-  current_odom = *msg;
+  } else { ROS_WARN("Plan failed"); }
 }
 
 /**
- * Main function for the planner_ros.
- * ros init with ROS Node: Landing Planner Node and run it.
+ * @brief Callback function for handling the current pose of the planner.
+ * 
+ * This function is called whenever a new odometry message is received.
+ * It updates the current_odom member variable with the received message.
+ * 
+ * @param msg The odometry message containing the current pose information.
+ */
+void PlannerNode::plannerCurrPoseHandler(const nav_msgs::Odometry::ConstPtr& msg) {
+  current_odom = *msg;
+}
+
+
+/**
+ * @brief The main function of the planner node.
+ *
+ * This function initializes the ROS node, creates an instance of the PlannerNode class,
+ * and calls the Run() function to start the planner node.
+ *
+ * @param argc The number of command-line arguments.
+ * @param argv An array of command-line arguments.
+ * @return int Returns 0 upon successful execution.
  */
 int main(int argc, char** argv) {
-  ROS_INFO("Starting Landing Planner Node ");
-  ros::init(argc, argv, "Landing Planner Node");
+  ROS_INFO("Starting Global Planner Node");
+  ros::init(argc, argv, "Landing Global Planner Node");
   PlannerNode node;
   node.Run();
   return 0;
 }
+
