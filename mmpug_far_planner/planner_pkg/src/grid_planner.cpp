@@ -261,7 +261,7 @@ auto GridPlanner::PlanWithAstar(const geometry_msgs::Pose& robot_pose, const geo
     int path_length = 0;
     geometry_msgs::PoseArray best_path;
     geometry_msgs::Pose last_waypoint_2, last_waypoint_1;
-    best_path.poses.reserve(maze_size * 2);
+    best_path.poses.reserve(x_size + y_size);
 
     if (pathFound) {
         ROS_INFO("BACKTRACKING..");

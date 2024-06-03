@@ -159,9 +159,7 @@ class GridPlanner {
      */
     auto PlanWithAstar(const geometry_msgs::Pose& robot_pose, const geometry_msgs::Pose& target,
                        geometry_msgs::PoseArray& plan) -> int;
-    void GridPlanner::CheckPoseInMap(const geometry_msgs::Pose& pose, Node& node);
-    void GridPlanner::SetAstarCost(Nodeptr& nodeptr, float g, float h);
-    auto GridPlanner::CalculateAngle(const geometry_msgs::Pose& pose_1, const geometry_msgs::Pose& pose_2) -> float;
+
 
    private:
     /**
@@ -219,6 +217,10 @@ class GridPlanner {
      * @brief A function to check if the given coordinates are within the map boundaries.
      */
     auto IsInMap(int x, int y) -> bool;
+
+    auto CheckPoseInMap(const geometry_msgs::Pose& pose, Node& node) -> bool;
+    void SetAstarCost(Nodeptr& nodeptr, float g, float h);
+    auto CalculateAngle(const geometry_msgs::Pose& pose_1, const geometry_msgs::Pose& pose_2) -> float;
 
     /**
      * @brief A function to wrap the angle to [-PI, PI).
