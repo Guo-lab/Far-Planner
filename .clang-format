@@ -1,0 +1,29 @@
+# clang-format
+# See http://clang.llvm.org/docs/ClangFormatStyleOptions.html
+
+BasedOnStyle: Google
+DerivePointerAlignment: false
+PointerAlignment: Left
+ColumnLimit: 120
+
+# Default for clang-8, changed in later clangs. Set explicitly for forwards
+# compatibility for students with modern clangs
+IncludeBlocks: Preserve
+
+# The number of columns used for tab stops.
+TabWidth: 4
+
+# IndentWidth (unsigned)
+# The number of columns to use for indentation.
+IndentWidth: 4
+
+Language: Cpp
+
+# Standard (LanguageStandard)
+# Format compatible with this standard, e.g. use A<A<int> > instead of A<A<int>> for LS_Cpp03.
+# Possible values:
+#   LS_Cpp03 (in configuration: Cpp03) Use C++03-compatible syntax.
+#   LS_Cpp11 (in configuration: Cpp11) Use features of C++11 (e.g. A<A<int>> instead of A<A<int> >).
+#   LS_Auto (in configuration: Auto) Automatic detection based on the input.
+Standard: Cpp11
+
