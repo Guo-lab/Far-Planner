@@ -133,6 +133,8 @@ class PlannerNode {
      */
     void ReloadPathToGoal(nav_msgs::Path& path, const geometry_msgs::PoseArray& plan);
 
+    auto ReplanTillGoal() -> bool;
+
     /**
      * @brief The ROS rate for the planner node.
      */
@@ -146,6 +148,7 @@ class PlannerNode {
      *  Default is false. Set to true when the cost map has been updated once.
      */
     bool initialized_map;
+    bool planning;
 
     /**
      * @brief The map resolution.

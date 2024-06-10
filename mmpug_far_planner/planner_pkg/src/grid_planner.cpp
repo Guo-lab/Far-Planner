@@ -148,6 +148,34 @@ void GridPlanner::UpdateMap(const nav_msgs::OccupancyGrid& grid, geometry_msgs::
     }
 }
 
+//============================ Waypoints Update Function ================================
+//============================
+/**
+ * @brief Update the waypoints for the planner.
+ *  The waypoints are the target poses to reach.
+ * @param waypoints The array of waypoints to update.
+ */
+void GridPlanner::UpdateWaypoints(const geometry_msgs::PoseArray& waypoints) {
+    if (waypoints.poses.size() == 0) {
+        ROS_WARN("NO WAYPOINTS TO UPDATE");
+        return;
+    }
+    if (ros::Time::now().toSec() > dynamic_waypoints.header.stamp.toSec()) {
+        dynamic_waypoints = waypoints;
+        dynamic_waypoints.header.stamp = ros::Time::now();
+        ROS_INFO("NEW INPUT WAYPOINTS UPDATED.");
+    }
+}
+
+/**
+ * @brief Get the dynamic waypoints for the planner.
+ *  The dynamic waypoints are the target poses to reach.
+ * @param waypoints The array of waypoints to update.
+ */
+void GridPlanner::GetDynamicWaypoints(geometry_msgs::PoseArray& waypoints) { waypoints = dynamic_waypoints; }
+
+
+
 //============================ A* Searching Algorithm Helper Function ================================
 //============================
 /**
@@ -205,6 +233,10 @@ auto GridPlanner::CalculateAngle(const geometry_msgs::Pose& pose_1, const geomet
 auto GridPlanner::PlanWithAstar(const geometry_msgs::Pose& robot_pose, const geometry_msgs::Pose& target,
                                 geometry_msgs::PoseArray& plan) -> int {
     if (CheckPoseInMap(robot_pose, start_node) == false || CheckPoseInMap(target, goal_node) == false) {
+        return -1;
+    }
+    if (start_node == goal_node) {
+        ROS_INFO("REACH ONE GOAL.");
         return 0;
     }
 
@@ -255,6 +287,7 @@ auto GridPlanner::PlanWithAstar(const geometry_msgs::Pose& robot_pose, const geo
                     }
                 }
             }
+            // 8 directions done
         }
     }
 
@@ -263,6 +296,10 @@ auto GridPlanner::PlanWithAstar(const geometry_msgs::Pose& robot_pose, const geo
     geometry_msgs::Pose last_waypoint_2, last_waypoint_1;
     best_path.poses.reserve(x_size + y_size);
 
+    if (!pathFound) {
+        ROS_WARN("NO PATH FOUND.");
+        return -1;
+    }
     if (pathFound) {
         ROS_INFO("BACKTRACKING..");
 
