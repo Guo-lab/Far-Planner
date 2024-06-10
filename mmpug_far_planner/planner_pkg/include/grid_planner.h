@@ -150,6 +150,9 @@ class GridPlanner {
      */
     void UpdateMap(const nav_msgs::OccupancyGrid& grid, geometry_msgs::Point& origin_point);
 
+    void UpdateWaypoints(const geometry_msgs::PoseArray& waypoints);
+    void GetDynamicWaypoints(geometry_msgs::PoseArray& waypoints);
+    
     /**
      * Global Plannomg with A* searching algorithm
      * @param robot_pose The current pose of the robot.
@@ -188,6 +191,11 @@ class GridPlanner {
      * @brief The map used by the grid planner. Global Cost Map.
      */
     std::vector<int8_t, std::allocator<int8_t>> map;
+
+    /**
+     * @brief The Dynamic Waypoints from real-time input 
+     */
+    geometry_msgs::PoseArray dynamic_waypoints;
 
     /**
      * @brief Function to estimate the euclidean distance between two points

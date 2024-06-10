@@ -12,6 +12,7 @@
  */
 PlannerNode::PlannerNode() : node_handler() {
     initialized_map = false;
+    planning = false;
 
     private_node_handler.getParam("ros_rate", ros_rate);
     private_node_handler.getParam("global_frame_id", global_frame_id);
@@ -57,9 +58,57 @@ void PlannerNode::Run() {
             ReloadGridMetadata();
             global_cost_map_publisher.publish(new_occ_grid);
         }
+
+        if (planning) {
+            planning = ReplanTillGoal();
+        }
         ros::spinOnce();
         rate.sleep();
     }
+}
+
+
+auto PlannerNode::ReplanTillGoal() -> bool {
+    geometry_msgs::PoseArray waypoints;
+    planner.GetDynamicWaypoints(waypoints);
+    if (waypoints.poses.size() == 0) {
+        ROS_INFO("NO WAYPOINTS TO PLAN, PLAN TERMINATED");
+        return false;
+    }
+
+    geometry_msgs::PoseArray plan;
+    geometry_msgs::Pose robot_pose = current_odom.pose.pose;
+    nav_msgs::Path path_to_goal;
+
+    ros::Time s1 = ros::Time::now();
+    int plan_length_from_current_pose_to_first_waypoint = planner.PlanWithAstar(robot_pose, waypoints.poses[0], plan);
+    if (plan_length_from_current_pose_to_first_waypoint <= 0) {
+        if (plan_length_from_current_pose_to_first_waypoint < 0) {
+            ROS_WARN("PLAN FAILED. NO PATH FOUND.");
+            return false;
+        }
+        ROS_INFO("REACH ONE WAYPOINT");
+        geometry_msgs::PoseArray tmp_pose_array;
+        planner.GetDynamicWaypoints(tmp_pose_array);
+        int waypoints_size = tmp_pose_array.poses.size();
+        tmp_pose_array.poses.erase(tmp_pose_array.poses.begin());
+        ROS_ASSERT(waypoints_size - 1 == tmp_pose_array.poses.size());
+        planner.UpdateWaypoints(tmp_pose_array);
+        return true;
+    } 
+    ros::Time s2 = ros::Time::now();
+    ros::Duration d = s2 - s1;
+    ROS_INFO_STREAM("PLANNING ROUTINE COMPLETE. TIME TAKEN: " << d.toSec());
+    plan.header.frame_id = global_frame_id;
+    plan.header.stamp = ros::Time::now();
+    for (int i = 1; i < waypoints.poses.size(); i++) {
+        plan.poses.push_back(waypoints.poses[i]);
+    }
+    plan_publisher.publish(plan);
+
+    ReloadPathToGoal(path_to_goal, plan);
+    path_to_goal_publisher.publish(path_to_goal);
+    return true;
 }
 
 /**
@@ -79,62 +128,14 @@ void PlannerNode::CostmapCallback(const nav_msgs::OccupancyGrid::ConstPtr& msg) 
 
 /**
  * PlannerNode HandleWaypointsRequest
+ *  Receiving a series of waypoints from the command interface.
+ *  The planner will plan a path from the current pose to the next waypoint. This path will be store into a temporary PoseArray.
+ *  The PoseArrya will be appended to the final point by many pathes.
  */
 void PlannerNode::HandleWaypointsRequest(const geometry_msgs::PoseArray::ConstPtr& req) {
-    geometry_msgs::PoseArray plan;
-    geometry_msgs::Pose robot_pose = current_odom.pose.pose;
-
-    /**
-     * Receiving a series of waypoints from the command interface.
-     * The planner will plan a path from the current pose to the next waypoint. This path will be store into a temporary PoseArray.
-     * The PoseArrya will be appended to the final point by many pathes.
-     */
-    ros::Time s1 = ros::Time::now();
-    int plan_length_from_current_pose_to_first_waypoint = planner.PlanWithAstar(robot_pose, req->poses[0], plan);
-    if (plan_length_from_current_pose_to_first_waypoint <= 0) {
-        ROS_WARN("PLAN FAILED. NO PATH FOUND.");
-        return;
-    } else if (req->poses.size() == 1) {
-        ros::Time s2 = ros::Time::now();
-        ros::Duration d = s2 - s1;
-        ROS_INFO_STREAM("PLANNING ROUTINE COMPLETE. TIME TAKEN: " << d.toSec());
-        
-        plan.header.frame_id = global_frame_id;
-        plan.header.stamp = ros::Time::now();
-        ROS_INFO("PLAN SUCCESSFUL. PUBLISHING...");
-        plan_publisher.publish(plan);
-        
-        nav_msgs::Path path_to_goal;
-        ReloadPathToGoal(path_to_goal, plan);
-        path_to_goal_publisher.publish(path_to_goal);
-        return;
-    }
-
-    for (int i = 0; i < req->poses.size() - 1; i++) {
-        geometry_msgs::PoseArray temp_plan;
-        int plan_length = planner.PlanWithAstar(req->poses[i], req->poses[i + 1], temp_plan);
-        if (plan_length <= 0) {
-            ROS_WARN("PLAN FAILED. NO PATH FOUND.");
-            return;
-        }
-        for (auto pose : temp_plan.poses) {
-            plan.poses.push_back(pose);
-        }
-    }
-    
-    ros::Time s2 = ros::Time::now();
-    ros::Duration d = s2 - s1;
-    ROS_INFO_STREAM("PLANNING ROUTINE COMPLETE. TIME TAKEN: " << d.toSec());
-    plan.header.frame_id = global_frame_id;
-    plan.header.stamp = ros::Time::now();
-    
-    ROS_INFO("PLAN SUCCESSFUL. PUBLISHING...");
-    plan_publisher.publish(plan);
-
-    nav_msgs::Path path_to_goal;
-    ReloadPathToGoal(path_to_goal, plan);
-    path_to_goal_publisher.publish(path_to_goal);
-    return;
+    ROS_INFO("RECEIVED WAYPOINTS REQUEST...");
+    planner.UpdateWaypoints(*req);
+    planning = true;
 }
 
 /**
