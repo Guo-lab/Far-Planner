@@ -99,6 +99,8 @@ typedef std::priority_queue<Nodeptr, std::vector<Nodeptr>, CompareFValues> OPEN_
  */
 class GridPlanner {
    public:
+    ros::Time plan_timer;
+    
     /**
      * @brief Constructor creates a new GridPlanner.
      *
@@ -196,6 +198,7 @@ class GridPlanner {
      * @brief The Dynamic Waypoints from real-time input 
      */
     geometry_msgs::PoseArray dynamic_waypoints;
+    float timer_distance;
 
     /**
      * @brief Function to estimate the euclidean distance between two points

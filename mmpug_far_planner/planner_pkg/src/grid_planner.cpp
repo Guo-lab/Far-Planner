@@ -235,7 +235,13 @@ auto GridPlanner::PlanWithAstar(const geometry_msgs::Pose& robot_pose, const geo
     if (CheckPoseInMap(robot_pose, start_node) == false || CheckPoseInMap(target, goal_node) == false) {
         return -1;
     }
-    if (start_node == goal_node) {
+    if (abs(EstimateEuclideanDistance(start_node.x, start_node.y, goal_node.x, goal_node.y) - timer_distance) >= 1) {
+        plan_timer = ros::Time::now();
+    }
+
+    timer_distance = EstimateEuclideanDistance(start_node.x, start_node.y, goal_node.x, goal_node.y);
+    ROS_INFO_STREAM("To Next Input Waypoint Distance: " << EstimateEuclideanDistance(start_node.x, start_node.y, goal_node.x, goal_node.y));
+    if (start_node == goal_node || EstimateEuclideanDistance(start_node.x, start_node.y, goal_node.x, goal_node.y) <= 10) {
         ROS_INFO("REACH ONE GOAL.");
         return 0;
     }

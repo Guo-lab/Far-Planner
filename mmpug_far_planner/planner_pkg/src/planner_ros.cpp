@@ -7,6 +7,9 @@
  */
 #include "planner_ros.h"
 
+// ros::Time timer;
+geometry_msgs::PoseArray verify_waypoints;
+
 /**
  * PlannerNode Constructor.
  */
@@ -61,6 +64,11 @@ void PlannerNode::Run() {
 
         if (planning) {
             planning = ReplanTillGoal();
+            if (planning && ros::Time::now() - planner.plan_timer > ros::Duration(10)) {
+                ROS_INFO("TIMEOUT. NO PATH FOUND.");
+                planning = false;
+                planner.plan_timer = ros::Time::now();
+            }
         }
         ros::spinOnce();
         rate.sleep();
@@ -73,6 +81,7 @@ auto PlannerNode::ReplanTillGoal() -> bool {
     planner.GetDynamicWaypoints(waypoints);
     if (waypoints.poses.size() == 0) {
         ROS_INFO("NO WAYPOINTS TO PLAN, PLAN TERMINATED");
+        planner.plan_timer = ros::Time::now();
         return false;
     }
 
@@ -85,6 +94,7 @@ auto PlannerNode::ReplanTillGoal() -> bool {
     if (plan_length_from_current_pose_to_first_waypoint <= 0) {
         if (plan_length_from_current_pose_to_first_waypoint < 0) {
             ROS_WARN("PLAN FAILED. NO PATH FOUND.");
+            planner.plan_timer = ros::Time::now();
             return false;
         }
         ROS_INFO("REACH ONE WAYPOINT");
@@ -94,6 +104,9 @@ auto PlannerNode::ReplanTillGoal() -> bool {
         tmp_pose_array.poses.erase(tmp_pose_array.poses.begin());
         ROS_ASSERT(waypoints_size - 1 == tmp_pose_array.poses.size());
         planner.UpdateWaypoints(tmp_pose_array);
+        ROS_INFO_STREAM("WAYPOINTS SIZE: " << tmp_pose_array.poses.size());
+        ROS_INFO_STREAM("WAYPOINTS SIZE: " << verify_waypoints.poses.size());
+        planner.plan_timer = ros::Time::now();
         return true;
     } 
     ros::Time s2 = ros::Time::now();
@@ -135,7 +148,9 @@ void PlannerNode::CostmapCallback(const nav_msgs::OccupancyGrid::ConstPtr& msg) 
 void PlannerNode::HandleWaypointsRequest(const geometry_msgs::PoseArray::ConstPtr& req) {
     ROS_INFO("RECEIVED WAYPOINTS REQUEST...");
     planner.UpdateWaypoints(*req);
+    verify_waypoints = *req;
     planning = true;
+    planner.plan_timer = ros::Time::now();
 }
 
 /**
