@@ -43,6 +43,8 @@ struct Node {
      */
     int key, x, y, time;
     float g, h, f;
+    /** Orientation */
+    // float theta;
     /**
      * @brief The parent node of the current node. This is a pointer.
      */
@@ -60,6 +62,11 @@ struct Node {
      * @brief Default constructor for Node. Without any given arguments to initialize.
      */
     Node() {}
+
+    /**
+     * For 2.5-D A* searching algorithm
+     */
+    // Node(int x, int y, float theta) : x(x), y(y), theta(theta) {}
 
     /**
      * @brief Overloads the equality operator for comparing two Node objects in the unordered map CLOSED_LIST.
@@ -165,6 +172,8 @@ class GridPlanner {
     auto PlanWithAstar(const geometry_msgs::Pose& robot_pose, const geometry_msgs::Pose& target,
                        geometry_msgs::PoseArray& plan) -> int;
 
+    auto PlanWithAstar25D(const geometry_msgs::Pose& robot_pose, const geometry_msgs::Pose& target,
+                       geometry_msgs::PoseArray& plan) -> int;
 
    private:
     /**
@@ -213,6 +222,8 @@ class GridPlanner {
     int GetMapIndex(int, int);
     int GetGridMapIndex(int, int, int);
 
+    // int GetMapIndex25D(int, int, float);
+
     /**
      * @brief Resets the map used by the grid planner.
      *  This function clears the map, removing all previously stored data.
@@ -228,6 +239,7 @@ class GridPlanner {
      * @brief A function to check if the given coordinates are within the map boundaries.
      */
     auto IsInMap(int x, int y) -> bool;
+
 
     auto CheckPoseInMap(const geometry_msgs::Pose& pose, Node& node) -> bool;
     void SetAstarCost(Nodeptr& nodeptr, float g, float h);
