@@ -2,7 +2,8 @@ cmake_minimum_required(VERSION 3.0.2)
 project(planner_pkg)
 
 ## Compile as C++11
-add_compile_options(-std=c++14)
+# add_compile_options(-std=c++14)
+add_compile_options(-std=c++17)
 
 ## Find catkin macros and libraries
 find_package(catkin REQUIRED COMPONENTS
@@ -15,6 +16,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   mmpug_msgs
   tf2_geometry_msgs
+  pcl_conversions
 )
 
 ## System dependencies are found with CMake's conventions
@@ -69,7 +71,12 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
-add_executable(grid_planner src/planner_ros.cpp src/grid_planner.cpp)
+add_executable(grid_planner 
+src/planner_ros.cpp 
+src/grid_planner.cpp
+src/grid_planner_astar.cpp
+src/grid_planner_thetastar.cpp
+)
 
 add_dependencies(grid_planner ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 

@@ -22,6 +22,11 @@
 #ifndef MIN
 #define MIN(A, B) ((A) < (B) ? (A) : (B))
 #endif
+
+//====================================== Constants =============================================
+const float MIN_OFFSET_ANGLE = 0.25;
+const float MERGE_DISTANCE = 8.0;
+
 const int LEFT = -1;
 const int RIGHT = 1;
 const int UP = -1;
@@ -107,7 +112,13 @@ typedef std::priority_queue<Nodeptr, std::vector<Nodeptr>, CompareFValues> OPEN_
 class GridPlanner {
    public:
     ros::Time plan_timer;
-    
+    /**
+     * Point Clouds for filtering the ground and obstacles
+     */
+    std::vector<std::shared_ptr<geometry_msgs::Point>> ground_cloud;
+    std::vector<std::shared_ptr<geometry_msgs::Point>> obstacle_cloud;
+
+
     /**
      * @brief Constructor creates a new GridPlanner.
      *
@@ -120,7 +131,7 @@ class GridPlanner {
     /**
      * @brief Default constructor for GridPlanner. Without any arguments to initialize.
      */
-    GridPlanner() {};
+    GridPlanner(){};
 
     /**
      * @brief Destructor destroys a GridPlanner.
@@ -161,7 +172,7 @@ class GridPlanner {
 
     void UpdateWaypoints(const geometry_msgs::PoseArray& waypoints);
     void GetDynamicWaypoints(geometry_msgs::PoseArray& waypoints);
-    
+
     /**
      * Global Plannomg with A* searching algorithm
      * @param robot_pose The current pose of the robot.
@@ -172,8 +183,8 @@ class GridPlanner {
     auto PlanWithAstar(const geometry_msgs::Pose& robot_pose, const geometry_msgs::Pose& target,
                        geometry_msgs::PoseArray& plan) -> int;
 
-    auto PlanWithAstar25D(const geometry_msgs::Pose& robot_pose, const geometry_msgs::Pose& target,
-                       geometry_msgs::PoseArray& plan) -> int;
+    auto PlanWithThetAstar(const geometry_msgs::Pose& robot_pose, const geometry_msgs::Pose& target,
+                           geometry_msgs::PoseArray& plan) -> int;
 
    private:
     /**
@@ -183,10 +194,13 @@ class GridPlanner {
      *  x_offset: The x offset of the map.
      *  y_offset: The y offset of the map.
      *  max_steps: The maximum number of steps to search.
+     */
+    int x_size, y_size, x_offset, y_offset, max_steps;
+
+    /**
      *  map_resolution: The resolution of the map.
      *  obstacle_cost: The cost of an obstacle in the map.
      */
-    int x_size, y_size, x_offset, y_offset, max_steps;
     float map_resolution, obstacle_cost;
 
     int dX[8] = {LEFT, LEFT, LEFT, STAY, STAY, RIGHT, RIGHT, RIGHT};
@@ -204,10 +218,15 @@ class GridPlanner {
     std::vector<int8_t, std::allocator<int8_t>> map;
 
     /**
-     * @brief The Dynamic Waypoints from real-time input 
+     * @brief The Dynamic Waypoints from real-time input
      */
     geometry_msgs::PoseArray dynamic_waypoints;
+
+    /**
+     * @brief The timer distance to reset the plan timer.
+     */
     float timer_distance;
+
 
     /**
      * @brief Function to estimate the euclidean distance between two points
@@ -240,11 +259,15 @@ class GridPlanner {
      */
     auto IsInMap(int x, int y) -> bool;
 
-
     auto CheckPoseInMap(const geometry_msgs::Pose& pose, Node& node) -> bool;
     void SetAstarCost(Nodeptr& nodeptr, float g, float h);
     auto CalculateAngle(const geometry_msgs::Pose& pose_1, const geometry_msgs::Pose& pose_2) -> float;
 
+    auto LineOfSight(const Nodeptr& start, const Nodeptr& end) -> bool;
+
+    auto FilterGroundPoint(geometry_msgs::Point& origin_point) -> bool;
+    auto FilterObstaclePoint(geometry_msgs::Point& origin_point) -> bool;
+    
     /**
      * @brief A function to wrap the angle to [-PI, PI).
      *  Mod the angle by 2 * PI, we have [0, 2 * M_PI).
@@ -257,4 +280,5 @@ class GridPlanner {
         return angle;
     }
 };
+
 #endif
