@@ -116,56 +116,56 @@ void GridPlanner::GetMap(std::vector<int8_t>& map_data) {
 
 
 
-bool InRange(float x1, float x2, float y1, float y2) {
-    if (abs(x1 - x2) <= 0.1 && abs(y1 - y2) <= 0.1) {
-        return true;
-    }
-    return false;
-}
-bool InRangeBig(float x1, float x2, float y1, float y2) {
-    if (abs(x1 - x2) <= 1 && abs(y1 - y2) <= 1) {
-        return true;
-    }
-    return false;
-}
+// bool InRange(float x1, float x2, float y1, float y2) {
+//     if (abs(x1 - x2) <= 0.1 && abs(y1 - y2) <= 0.1) {
+//         return true;
+//     }
+//     return false;
+// }
+// bool InRangeBig(float x1, float x2, float y1, float y2) {
+//     if (abs(x1 - x2) <= 1 && abs(y1 - y2) <= 1) {
+//         return true;
+//     }
+//     return false;
+// }
 
-auto GridPlanner::FilterObstaclePoint(geometry_msgs::Point& origin_point)
-    -> bool {
-    for (const auto& point_ptr : obstacle_cloud) {
-        const auto& each = *point_ptr;
-        if (InRangeBig(each.x, origin_point.x, each.y, origin_point.y)) {
-            ROS_INFO("origin_point: %f, %f", origin_point.x, origin_point.y);
-            ROS_INFO("obstacle_point: %f, %f", each.x, each.y);
-            return true;
-        } 
-        else {
-            ROS_INFO("origin_point: %f, %f", origin_point.x, origin_point.y);
-            ROS_INFO("obstacle_point: %f, %f", each.x, each.y);
-        }
-    }
-    return false;
-}
+// auto GridPlanner::FilterObstaclePoint(geometry_msgs::Point& origin_point)
+//     -> bool {
+//     for (const auto& point_ptr : obstacle_cloud) {
+//         const auto& each = *point_ptr;
+//         if (InRangeBig(each.x, origin_point.x, each.y, origin_point.y)) {
+//             ROS_INFO("origin_point: %f, %f", origin_point.x, origin_point.y);
+//             ROS_INFO("obstacle_point: %f, %f", each.x, each.y);
+//             return true;
+//         } 
+//         else {
+//             ROS_INFO("origin_point: %f, %f", origin_point.x, origin_point.y);
+//             ROS_INFO("obstacle_point: %f, %f", each.x, each.y);
+//         }
+//     }
+//     return false;
+// }
 
-auto GridPlanner::FilterGroundPoint(geometry_msgs::Point& origin_point) -> bool {
-    bool is_ground = false;
-    for (const auto& point_ptr : ground_cloud) {
-        const auto& each = *point_ptr;
-        if (InRange(each.x, origin_point.x, each.y, origin_point.y)) {
-            is_ground = true;
-            break;
-        }
-    }
-    if (is_ground == false) {
-        return false;
-    }
-    for (const auto& point_ptr : obstacle_cloud) {
-        const auto& each = *point_ptr;
-        if (InRange(each.x, origin_point.x, each.y, origin_point.y)) {
-            return false;
-        }
-    }
-    return true;
-}
+// auto GridPlanner::FilterGroundPoint(geometry_msgs::Point& origin_point) -> bool {
+//     bool is_ground = false;
+//     for (const auto& point_ptr : ground_cloud) {
+//         const auto& each = *point_ptr;
+//         if (InRange(each.x, origin_point.x, each.y, origin_point.y)) {
+//             is_ground = true;
+//             break;
+//         }
+//     }
+//     if (is_ground == false) {
+//         return false;
+//     }
+//     for (const auto& point_ptr : obstacle_cloud) {
+//         const auto& each = *point_ptr;
+//         if (InRange(each.x, origin_point.x, each.y, origin_point.y)) {
+//             return false;
+//         }
+//     }
+//     return true;
+// }
 
 /**
  * @brief Updates the global cost map with the given occupancy grid and origin point.
@@ -189,25 +189,21 @@ void GridPlanner::UpdateMap(const nav_msgs::OccupancyGrid& grid, geometry_msgs::
                 int grid_idx = GetGridMapIndex(i, j, (int)grid.info.height);
                 if (this->map[current_idx] == obstacle_cost / 2) {
                     this->map[current_idx] = (int8_t)grid.data.at(grid_idx);
-                } else {
-                    if (grid.data.at(grid_idx) != obstacle_cost / 2 && grid.data.at(grid_idx) != 0) {
+                } 
+                else {
+                    if (grid.data.at(grid_idx) == obstacle_cost) {
                         this->map[current_idx] = (int8_t)grid.data.at(grid_idx);
                     }
-                    // if (grid.data.at(grid_idx) == 0) {
-                    //     if (FilterGroundPoint(origin_point)) {
-                    //         this->map[current_idx] = 0;
-                    //     }
+                    // ROS_INFO_STREAM("grid.data.at(grid_idx): " << grid.data.at(grid_idx));
+                    // ROS_INFO_STREAM("ground_occ_grid.data.at(grid_idx): " << ground_occ_grid.data.at(grid_idx));
+                    
+                    // if (grid.data.at(grid_idx) == 0 && ground_occ_grid.data.at(grid_idx) != 0) {
+                    //     this->map[current_idx] = (int8_t)grid.data.at(grid_idx);
                     // }
-                    if (grid.data.at(grid_idx) == obstacle_cost) {
-                        if (FilterGroundPoint(origin_point)) {
-                            this->map[current_idx] = 0;
-                        }
-                    }
-                    if (grid.data.at(grid_idx) == obstacle_cost) {
-                        if (!FilterObstaclePoint(origin_point)) {
-                            // ROS_INFO("FILTERING OBSTACLE POINTS");
-                            this->map[current_idx] = 0;
-                        }
+
+                    if (grid.data.at(grid_idx) == 0 && ground_occ_grid.data.at(grid_idx) == 0) {
+                        // ROS_INFO_STREAM("ground_occ_grid.data.at (x,y) " << x1 + i << ", " << y1 + j);
+                        this->map[current_idx] = (int8_t)grid.data.at(grid_idx);
                     }
                 }
             }
@@ -215,7 +211,9 @@ void GridPlanner::UpdateMap(const nav_msgs::OccupancyGrid& grid, geometry_msgs::
     }
 }
 
-
+void GridPlanner::UpdateMapBasedOnGround(const nav_msgs::OccupancyGrid& grid) {
+    ground_occ_grid = grid;
+}
 
 
 //============================ Waypoints Update Function ================================

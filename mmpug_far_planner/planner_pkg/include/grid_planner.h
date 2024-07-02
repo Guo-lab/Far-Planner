@@ -115,8 +115,8 @@ class GridPlanner {
     /**
      * Point Clouds for filtering the ground and obstacles
      */
-    std::vector<std::shared_ptr<geometry_msgs::Point>> ground_cloud;
-    std::vector<std::shared_ptr<geometry_msgs::Point>> obstacle_cloud;
+    // std::vector<std::shared_ptr<geometry_msgs::Point>> ground_cloud;
+    // std::vector<std::shared_ptr<geometry_msgs::Point>> obstacle_cloud;
 
 
     /**
@@ -169,6 +169,7 @@ class GridPlanner {
      * @param origin_point The origin point in local planner's map, used to calculate the map coordinates.
      */
     void UpdateMap(const nav_msgs::OccupancyGrid& grid, geometry_msgs::Point& origin_point);
+    void UpdateMapBasedOnGround(const nav_msgs::OccupancyGrid& grid);
 
     void UpdateWaypoints(const geometry_msgs::PoseArray& waypoints);
     void GetDynamicWaypoints(geometry_msgs::PoseArray& waypoints);
@@ -227,6 +228,7 @@ class GridPlanner {
      */
     float timer_distance;
 
+    nav_msgs::OccupancyGrid ground_occ_grid;
 
     /**
      * @brief Function to estimate the euclidean distance between two points
@@ -265,9 +267,9 @@ class GridPlanner {
 
     auto LineOfSight(const Nodeptr& start, const Nodeptr& end) -> bool;
 
-    auto FilterGroundPoint(geometry_msgs::Point& origin_point) -> bool;
-    auto FilterObstaclePoint(geometry_msgs::Point& origin_point) -> bool;
-    
+    // auto FilterGroundPoint(geometry_msgs::Point& origin_point) -> bool;
+    // auto FilterObstaclePoint(geometry_msgs::Point& origin_point) -> bool;
+
     /**
      * @brief A function to wrap the angle to [-PI, PI).
      *  Mod the angle by 2 * PI, we have [0, 2 * M_PI).

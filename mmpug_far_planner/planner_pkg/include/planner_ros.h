@@ -84,9 +84,9 @@ class PlannerNode {
      *  from the local planner's local cost map.
      */
     ros::Subscriber costmap_sub;
-
-    ros::Subscriber ground_cloud_sub;
-    ros::Subscriber obstacle_cloud_sub;
+    ros::Subscriber ground_sub;
+    // ros::Subscriber ground_cloud_sub;
+    // ros::Subscriber obstacle_cloud_sub;
 
     /**
      * @brief A ROS publisher for publishing the global planner's plan messages.
@@ -116,8 +116,10 @@ class PlannerNode {
      */
     void CostmapCallback(const nav_msgs::OccupancyGrid::ConstPtr& msg);
 
-    void GroundCloudCallback(const sensor_msgs::PointCloud2::ConstPtr& msg);
-    void ObstacleCloudCallback(const sensor_msgs::PointCloud2::ConstPtr& msg);
+    void GroundCallback(const nav_msgs::OccupancyGrid::ConstPtr& msg);
+
+    // void GroundCloudCallback(const sensor_msgs::PointCloud2::ConstPtr& msg);
+    // void ObstacleCloudCallback(const sensor_msgs::PointCloud2::ConstPtr& msg);
 
     /**
      * @brief Callback function for the planner request subscriber.
