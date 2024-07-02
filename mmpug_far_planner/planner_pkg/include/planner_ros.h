@@ -5,6 +5,7 @@
 #include <nav_msgs/OccupancyGrid.h>
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
+#include <sensor_msgs/PointCloud2.h>
 #include <ros/ros.h>
 #include <std_msgs/Bool.h>
 #include <std_msgs/Float32.h>
@@ -83,6 +84,9 @@ class PlannerNode {
      *  from the local planner's local cost map.
      */
     ros::Subscriber costmap_sub;
+    ros::Subscriber ground_sub;
+    // ros::Subscriber ground_cloud_sub;
+    // ros::Subscriber obstacle_cloud_sub;
 
     /**
      * @brief A ROS publisher for publishing the global planner's plan messages.
@@ -99,7 +103,8 @@ class PlannerNode {
      * @brief A ROS publisher for publishing the path from the current position to the goal.
      *  This will be used to visualize the path in Rviz.
      */
-    ros::Publisher path_to_goal_publisher;
+    ros::Publisher a_star_path_to_goal_publisher;
+    ros::Publisher theta_star_path_to_goal_publisher;
 
     /**
      * @brief Callback function for the costmap subscriber, updating the cost map used by the planner.
@@ -110,6 +115,11 @@ class PlannerNode {
      * @param msg The received occupancy grid message, aka, costmap message.
      */
     void CostmapCallback(const nav_msgs::OccupancyGrid::ConstPtr& msg);
+
+    void GroundCallback(const nav_msgs::OccupancyGrid::ConstPtr& msg);
+
+    // void GroundCloudCallback(const sensor_msgs::PointCloud2::ConstPtr& msg);
+    // void ObstacleCloudCallback(const sensor_msgs::PointCloud2::ConstPtr& msg);
 
     /**
      * @brief Callback function for the planner request subscriber.
