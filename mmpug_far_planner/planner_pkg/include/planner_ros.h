@@ -14,6 +14,7 @@
 /**For Rviz visualization-specific data */
 #include <visualization_msgs/Marker.h>
 
+
 /**In the old architecture, it is required to use tf2 library
  *  to handle coordinate transformations between different coordinate frames.
  * The transform listener is used to listen to coordinate transformations broadcasted on the ROS network.
@@ -21,6 +22,8 @@
  *  transform between global frame and local frame.
  * However, in the new architecture, the frame has been consistent, thus tf2 is no more needed.
  */
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
 #include <stdlib.h>
 #include <algorithm>
@@ -84,6 +87,7 @@ class PlannerNode {
      *  from the local planner's local cost map.
      */
     ros::Subscriber costmap_sub;
+    
     ros::Subscriber ground_sub;
     // ros::Subscriber ground_cloud_sub;
     // ros::Subscriber obstacle_cloud_sub;

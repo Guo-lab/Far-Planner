@@ -5,13 +5,8 @@
  * @author Siqi. Edward, Guo
  * @version 1.0
  */
-#include "planner_ros.h"
 
-// #include <pcl/point_types.h>
-#include <pcl_ros/point_cloud.h>
-// #include <pcl/common/transforms.h>
-#include <pcl/conversions.h>
-#include <pcl_conversions/pcl_conversions.h> /** for converting PointCloud2 to PCL data types */
+#include "planner_ros.h"
 
 // ros::Time timer;
 geometry_msgs::PoseArray verify_waypoints;
@@ -52,18 +47,16 @@ void PlannerNode::Run() {
                                          &PlannerNode::CostmapCallback, this);
     waypoints_sub =
         node_handler.subscribe("cmu_rc1/command_interface/waypoint", 10, &PlannerNode::HandleWaypointsRequest, this);
+
     current_pose_sub = node_handler.subscribe("cmu_rc1/odom_to_base_link", 1, &PlannerNode::HandleCurrentPose, this);
-    
-    // ground_cloud_sub = node_handler.subscribe("cmu_rc1/local_mapping_lidar_node/voxel_grid/ground_pointcloud", 1,
-    //                                           &PlannerNode::GroundCloudCallback, this);
-    // obstacle_cloud_sub = node_handler.subscribe("cmu_rc1/local_mapping_lidar_node/voxel_grid/obstacle_pointcloud", 1,
-    //                                             &PlannerNode::ObstacleCloudCallback, this);
 
     ground_sub = node_handler.subscribe("cmu_rc1/local_mapping_lidar_node/voxel_grid/ground_observed_map", 1,
-                                       &PlannerNode::GroundCallback, this);
+                                        &PlannerNode::GroundCallback, this);
 
     plan_publisher = node_handler.advertise<geometry_msgs::PoseArray>("cmu_rc1/mux/goal_input", 1, true);
+
     global_cost_map_publisher = node_handler.advertise<nav_msgs::OccupancyGrid>("cmu_rc1/final_occ_grid", 1, true);
+
     a_star_path_to_goal_publisher = node_handler.advertise<nav_msgs::Path>("cmu_rc1/a_star_path_to_goal", 1, true);
     theta_star_path_to_goal_publisher =
         node_handler.advertise<nav_msgs::Path>("cmu_rc1/theta_star_path_to_goal", 1, true);
@@ -114,6 +107,7 @@ auto PlannerNode::ReplanTillGoal() -> bool {
 
     int plan_length_from_current_pose_to_first_waypoint =
         planner.PlanWithAstar(robot_pose, waypoints.poses[0], a_star_plan);
+
     plan_length_from_current_pose_to_first_waypoint =
         planner.PlanWithThetAstar(robot_pose, waypoints.poses[0], theta_star_plan);
 
@@ -173,60 +167,18 @@ auto PlannerNode::ReplanTillGoal() -> bool {
 void PlannerNode::CostmapCallback(const nav_msgs::OccupancyGrid::ConstPtr& msg) {
     geometry_msgs::Point origin_point = msg->info.origin.position;
     // ROS_INFO_STREAM("Cost Map Origin: (" << origin_point.x << ", " << origin_point.y << ")");
+
     planner.UpdateMap(*msg, origin_point);
+
     initialized_map = true;
 }
 
-void PlannerNode::GroundCallback(const nav_msgs::OccupancyGrid::ConstPtr& msg) {    
+void PlannerNode::GroundCallback(const nav_msgs::OccupancyGrid::ConstPtr& msg) {
     geometry_msgs::Point origin_point = msg->info.origin.position;
+
     // ROS_INFO_STREAM("Ground Map Origin: (" << origin_point.x << ", " << origin_point.y << ")");
     planner.UpdateMapBasedOnGround(*msg);
 }
-
-// void PlannerNode::GroundCloudCallback(const sensor_msgs::PointCloud2::ConstPtr& msg) {
-//     // ROS_INFO("UPDATING GROUND CLOUD FOR PLANNER...");
-    
-//     pcl::PCLPointCloud2 pcl_pc2;
-//     pcl_conversions::toPCL(*msg, pcl_pc2);
-//     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
-//     pcl::fromPCLPointCloud2(pcl_pc2, *cloud);
-//     const float ground_z = 0.0;
-
-//     planner.ground_cloud.clear();
-//     for (const auto& each_point : cloud->points) {
-//         auto point_ptr = std::make_shared<geometry_msgs::Point>();
-//         point_ptr->x = each_point.x;
-//         point_ptr->y = each_point.y;
-//         point_ptr->z = ground_z;
-//         planner.ground_cloud.push_back(point_ptr);
-//         // ROS_INFO("Point: (%f, %f)", x, y);
-//     }
-//     // ROS_INFO("Cloud Size: %ld", cloud->size());
-//     // ROS_INFO("Ground Cloud Size: %ld", planner.ground_cloud.size());
-// }
-
-// void PlannerNode::ObstacleCloudCallback(const sensor_msgs::PointCloud2::ConstPtr& msg) {
-//     // ROS_INFO("UPDATING OBSTACLE CLOUD FOR PLANNER...");
-
-//     pcl::PCLPointCloud2 pcl_pc2;
-//     pcl_conversions::toPCL(*msg, pcl_pc2);
-//     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
-//     pcl::fromPCLPointCloud2(pcl_pc2, *cloud);
-
-//     planner.obstacle_cloud.clear();
-//     for (const auto& each_point : cloud->points) {
-//         auto point_ptr = std::make_shared<geometry_msgs::Point>();
-//         point_ptr->x = each_point.x;
-//         point_ptr->y = each_point.y;
-//         point_ptr->z = each_point.z;
-//         planner.obstacle_cloud.push_back(point_ptr);
-//     }
-//     ROS_INFO("Cloud Size: %ld", cloud->size());
-//     ROS_INFO("Obstacle Cloud Size: %ld", planner.obstacle_cloud.size());
-// }
-
-
-
 
 /**
  * PlannerNode HandleWaypointsRequest
@@ -236,10 +188,26 @@ void PlannerNode::GroundCallback(const nav_msgs::OccupancyGrid::ConstPtr& msg) {
  */
 void PlannerNode::HandleWaypointsRequest(const geometry_msgs::PoseArray::ConstPtr& req) {
     ROS_INFO("RECEIVED WAYPOINTS REQUEST...");
+
     planner.UpdateWaypoints(*req);
     verify_waypoints = *req;
+
     planning = true;
     planner.plan_timer = ros::Time::now();
+}
+
+/**
+ * @brief Round the yaw angle to the nearest 45 degrees.
+ */
+double RoundYawToNearestRay(double yaw) {
+    // Convert radians to degrees
+    double yaw_deg = yaw * 180.0 / M_PI;
+
+    // Round yaw_deg to nearest 45 degrees
+    yaw_deg = std::round(yaw_deg / 45.0) * 45.0;
+
+    // Convert back to radians
+    return yaw_deg * M_PI / 180.0;
 }
 
 /**
@@ -250,7 +218,29 @@ void PlannerNode::HandleWaypointsRequest(const geometry_msgs::PoseArray::ConstPt
  *
  * @param msg The odometry message containing the current pose information.
  */
-void PlannerNode::HandleCurrentPose(const nav_msgs::Odometry::ConstPtr& msg) { current_odom = *msg; }
+void PlannerNode::HandleCurrentPose(const nav_msgs::Odometry::ConstPtr& msg) {
+    current_odom = *msg;
+
+    geometry_msgs::Quaternion ori = current_odom.pose.pose.orientation;
+
+    // Convert quaternion to Euler angles (roll, pitch, yaw)
+    tf2::Quaternion q(ori.x, ori.y, ori.z, ori.w);
+    tf2::Matrix3x3 m(q);
+    double roll, pitch, yaw;
+    m.getRPY(roll, pitch, yaw);
+
+    double yaw_deg = yaw * 180.0 / M_PI;
+
+    ROS_INFO_STREAM("Quaternion: (" << ori.x << ", " << ori.y << ", " << ori.z << ", " << ori.w << ")");
+
+    ROS_INFO_STREAM("Current Orientation: (" << roll << ", " << pitch << ", " << yaw << ")");
+    ROS_INFO_STREAM("Yaw: " << yaw_deg << " degrees");
+
+    ROS_INFO_STREAM("Rounded Yaw: " << RoundYawToNearestRay(yaw));
+
+    planner.curr_yaw = RoundYawToNearestRay(yaw) * 180.0 / M_PI;
+    ROS_INFO_STREAM("Rounded Yaw: " << planner.curr_yaw << " degrees");
+}
 
 /**
  * @brief Update the metadata of the global cost map to publish.
