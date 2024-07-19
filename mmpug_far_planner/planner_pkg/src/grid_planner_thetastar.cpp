@@ -22,7 +22,9 @@ auto GridPlanner::LineOfSight(const Nodeptr& start, const Nodeptr& end) -> bool 
     int err = dx - dy;
 
     for (int i = 0; i < max_iter_step; i++) {
-        if (map[GetMapIndex(x0, y0)] >= obstacle_cost) return false; /** No line of sight */
+        // if (map[GetMapIndex(x0, y0)] >= obstacle_cost) return false; /** No line of sight */
+        if (configuration_space_map[GetMapIndex(x0, y0)] >= obstacle_cost) return false;
+
         if (x0 == x1 && y0 == y1) return true;
         int e2 = 2 * err;
         if (e2 > -dy) err -= dy;
@@ -30,6 +32,58 @@ auto GridPlanner::LineOfSight(const Nodeptr& start, const Nodeptr& end) -> bool 
         if (e2 < dx) err += dx;
         if (e2 < dx) y0 += sy;
     }
+    return false;
+}
+
+/**
+ * @brief Function to filter expansion directions (Any-Angle Path Planning on Cells)
+ *  During A* (variants) search, there are 8 directions.
+ *   index  0: left up      1: left         2: left down
+ *          3: up           4: down
+ *          5: right up     6: right        7: right down
+ *     yaw  0
+ *      ----------------------------
+ *      |        |        |        |
+ *      |        |        |        |
+ *      ----------------------------
+ *      |        |        |        |
+ *      |        |        |        |
+ *      ----------------------------
+ *      |        |        |        |
+ *      |        |        |        |
+ *      ----------------------------
+ */
+auto GridPlanner::OrientationConstraint() -> bool {
+    ROS_INFO_STREAM("Orientation Constraint with current yaw: " << curr_yaw);
+
+    // switch ((int)curr_yaw) {
+    //     case 0:
+    //         if (abs(dX[dir]) == 1 && dY[dir] == 0) return true;
+    //         break;
+    //     case 45:
+    //         if (dX[dir] == 1 && dY[dir] == -1) return true;
+    //         break;
+    //     case 90:
+    //         if (dX[dir] == 0 && abs(dY[dir]) == 1) return true;
+    //         break;
+    //     case 135:
+    //         if (dX[dir] == -1 && dY[dir] == -1) return true;
+    //         break;
+    //     case 180:
+    //         if (abs(dX[dir]) == 1 && dY[dir] == 0) return true;
+    //         break;
+    //     case 225:
+    //         if (dX[dir] == -1 && dY[dir] == 1) return true;
+    //         break;
+    //     case 270:
+    //         if (dX[dir] == 0 && abs(dY[dir]) == 1) return true;
+    //         break;
+    //     case 315:
+    //         if (dX[dir] == 1 && dY[dir] == 1) return true;
+    //         break;
+    //     default:
+    //         break;
+    // }
     return false;
 }
 
@@ -87,6 +141,7 @@ auto GridPlanner::PlanWithThetAstar(const geometry_msgs::Pose& robot_pose, const
                 pathFound = true;
                 break;
             }
+
             for (int dir = 0; dir < 8; dir++) {
                 int newx = curr_node->x + dX[dir];
                 int newy = curr_node->y + dY[dir];
@@ -97,11 +152,15 @@ auto GridPlanner::PlanWithThetAstar(const geometry_msgs::Pose& robot_pose, const
                 if (closed_list.count(new_key) == 0 || closed_list.at(new_key)->time < newt) {
                     expand = true;
                 }
+
                 if (expand && IsInMap(newx, newy)) {
-                    int new_cost_from_map = (int)map[GetMapIndex(newx, newy)];
+                    // int new_cost_from_map = (int)map[GetMapIndex(newx, newy)];
+                    int new_cost_from_map = (int)configuration_space_map[GetMapIndex(newx, newy)];
+
                     if (new_cost_from_map >= 0 && new_cost_from_map < obstacle_cost) {
                         float g_s_dash = curr_node->g + new_cost_from_map + sqrt(dX[dir] * dX[dir] + dY[dir] * dY[dir]);
                         float h_s_dash = EstimateEuclideanDistance(newx, newy, goal_node.x, goal_node.y);
+
                         Nodeptr successor = std::make_shared<Node>(newx, newy);
                         successor->parent = curr_node;
 

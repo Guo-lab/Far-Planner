@@ -15,8 +15,10 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   std_msgs
   mmpug_msgs
+  tf2
   tf2_geometry_msgs
   pcl_conversions
+  cv_bridge
 )
 
 ## System dependencies are found with CMake's conventions

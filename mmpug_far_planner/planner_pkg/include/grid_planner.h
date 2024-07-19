@@ -10,6 +10,12 @@
 #include <nav_msgs/OccupancyGrid.h>
 #include <ros/ros.h>
 
+#include <image_transport/image_transport.h>
+#include <cv_bridge/cv_bridge.h>
+#include <sensor_msgs/image_encodings.h>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/highgui/highgui.hpp>
+
 #include <stdlib.h>
 #include <algorithm>
 #include <cmath>
@@ -41,10 +47,12 @@ struct Node {
      * @brief Node fields.
      *  key: The index of the node in the map.
      *  x, y: The x, y coordinate of the node.
+     * 
      *  g: The cost to reach the node, the cost of the path from the start node to the current node
      *  h: The heuristic cost to reach the goal from the node. It estimates the cost of the cheapest path from the
-     * current node to the goal node. f: The total cost of the node. (g + h). Cost to determine which node to explore
-     * next. It prioritizes nodes with lower f values.
+     *      current node to the goal node. 
+     *  f: The total cost of the node. (g + h). Cost to determine which node to explore
+     *      next. It prioritizes nodes with lower f values.
      */
     int key, x, y, time;
     float g, h, f;
@@ -67,11 +75,6 @@ struct Node {
      * @brief Default constructor for Node. Without any given arguments to initialize.
      */
     Node() {}
-
-    /**
-     * For 2.5-D A* searching algorithm
-     */
-    // Node(int x, int y, float theta) : x(x), y(y), theta(theta) {}
 
     /**
      * @brief Overloads the equality operator for comparing two Node objects in the unordered map CLOSED_LIST.
@@ -112,12 +115,14 @@ typedef std::priority_queue<Nodeptr, std::vector<Nodeptr>, CompareFValues> OPEN_
 class GridPlanner {
    public:
     ros::Time plan_timer;
+
+    double curr_yaw;
+
     /**
      * Point Clouds for filtering the ground and obstacles
      */
     // std::vector<std::shared_ptr<geometry_msgs::Point>> ground_cloud;
     // std::vector<std::shared_ptr<geometry_msgs::Point>> obstacle_cloud;
-
 
     /**
      * @brief Constructor creates a new GridPlanner.
@@ -169,9 +174,11 @@ class GridPlanner {
      * @param origin_point The origin point in local planner's map, used to calculate the map coordinates.
      */
     void UpdateMap(const nav_msgs::OccupancyGrid& grid, geometry_msgs::Point& origin_point);
+    
     void UpdateMapBasedOnGround(const nav_msgs::OccupancyGrid& grid);
 
     void UpdateWaypoints(const geometry_msgs::PoseArray& waypoints);
+    
     void GetDynamicWaypoints(geometry_msgs::PoseArray& waypoints);
 
     /**
@@ -207,6 +214,7 @@ class GridPlanner {
     int dX[8] = {LEFT, LEFT, LEFT, STAY, STAY, RIGHT, RIGHT, RIGHT};
     int dY[8] = {UP, STAY, DOWN, UP, DOWN, UP, STAY, DOWN};
 
+
     /**
      * @brief The start and goal nodes for the A* search algorithm.
      *  Based on the `Node` structure.
@@ -218,6 +226,8 @@ class GridPlanner {
      */
     std::vector<int8_t, std::allocator<int8_t>> map;
 
+    std::vector<int8_t, std::allocator<int8_t>> configuration_space_map;
+    
     /**
      * @brief The Dynamic Waypoints from real-time input
      */
@@ -241,9 +251,8 @@ class GridPlanner {
      *  This is also the Key in Closed list.
      */
     int GetMapIndex(int, int);
+    
     int GetGridMapIndex(int, int, int);
-
-    // int GetMapIndex25D(int, int, float);
 
     /**
      * @brief Resets the map used by the grid planner.
@@ -262,13 +271,16 @@ class GridPlanner {
     auto IsInMap(int x, int y) -> bool;
 
     auto CheckPoseInMap(const geometry_msgs::Pose& pose, Node& node) -> bool;
+    
     void SetAstarCost(Nodeptr& nodeptr, float g, float h);
+    
     auto CalculateAngle(const geometry_msgs::Pose& pose_1, const geometry_msgs::Pose& pose_2) -> float;
 
     auto LineOfSight(const Nodeptr& start, const Nodeptr& end) -> bool;
 
-    // auto FilterGroundPoint(geometry_msgs::Point& origin_point) -> bool;
-    // auto FilterObstaclePoint(geometry_msgs::Point& origin_point) -> bool;
+    void ThickenObstacles(std::vector<int8_t, std::allocator<int8_t>> &map_data_to_thicken);
+
+    auto OrientationConstraint() -> bool;
 
     /**
      * @brief A function to wrap the angle to [-PI, PI).

@@ -5,7 +5,9 @@
  * @version 1.0
  * @date 2024
  */
+
 #include "grid_planner.h"
+
 using namespace std;
 
 /**
@@ -19,8 +21,11 @@ GridPlanner::GridPlanner(int map_size, float map_resolution, int min_obs_cost)
     : x_size(map_size), y_size(map_size), map_resolution(map_resolution), obstacle_cost(min_obs_cost) {
     this->x_offset = -map_size / 2;
     this->y_offset = -map_size / 2;
+    this->curr_yaw = 90.0;
+
     InitializeMap();
 }
+
 /**
  * @brief Destructor destroys a GridPlanner.
  *
@@ -38,6 +43,7 @@ GridPlanner::~GridPlanner() { ResetMap(); }
  */
 void GridPlanner::ResetMap() {
     this->map.clear();
+    this->configuration_space_map.clear();
     return;
 }
 
@@ -78,8 +84,10 @@ auto GridPlanner::IsInMap(int x, int y) -> bool { return (x >= 0 && x < x_size &
 auto GridPlanner::CheckPoseInMap(const geometry_msgs::Pose& pose, Node& node) -> bool {
     node.x = pose.position.x / map_resolution - x_offset;
     node.y = pose.position.y / map_resolution - y_offset;
+
     if (IsInMap(node.x, node.y) == false) {
         ROS_WARN("CANCELLING PLANNER BECAUSE POSE IS NOT IN THE GRID");
+
         return false;
     }
     return true;
@@ -110,62 +118,66 @@ int GridPlanner::GetGridMapIndex(int x, int y, int height) { return (y * height 
  * @param map_data The vector to store the retrieved map.
  */
 void GridPlanner::GetMap(std::vector<int8_t>& map_data) {
-    map_data = this->map;
+    // map_data = this->map;
+    map_data = this->configuration_space_map;
+
     return;
 }
 
+/**
+ * @brief Thicken the obstacles in the map.
+ *
+ *     Convert Workspace To Configuration Space.
+ */
+void GridPlanner::ThickenObstacles(std::vector<int8_t, std::allocator<int8_t>>& map_data_to_thicken) {
+    // this->configuration_space_map = map_data_to_thicken;
 
+    ROS_INFO("THICKENING OBSTACLES..");
 
-// bool InRange(float x1, float x2, float y1, float y2) {
-//     if (abs(x1 - x2) <= 0.1 && abs(y1 - y2) <= 0.1) {
-//         return true;
-//     }
-//     return false;
-// }
-// bool InRangeBig(float x1, float x2, float y1, float y2) {
-//     if (abs(x1 - x2) <= 1 && abs(y1 - y2) <= 1) {
-//         return true;
-//     }
-//     return false;
-// }
+    // CV_8S indicates the data type (8-bit signed integer)
+    cv::Mat map_mat = cv::Mat(this->y_size, this->x_size, CV_8U, map_data_to_thicken.data()).clone();
+    ROS_INFO_STREAM("map_mat: " << map_mat.rows << " x " << map_mat.cols << " with channels: " << map_mat.channels());
 
-// auto GridPlanner::FilterObstaclePoint(geometry_msgs::Point& origin_point)
-//     -> bool {
-//     for (const auto& point_ptr : obstacle_cloud) {
-//         const auto& each = *point_ptr;
-//         if (InRangeBig(each.x, origin_point.x, each.y, origin_point.y)) {
-//             ROS_INFO("origin_point: %f, %f", origin_point.x, origin_point.y);
-//             ROS_INFO("obstacle_point: %f, %f", each.x, each.y);
-//             return true;
-//         } 
-//         else {
-//             ROS_INFO("origin_point: %f, %f", origin_point.x, origin_point.y);
-//             ROS_INFO("obstacle_point: %f, %f", each.x, each.y);
-//         }
-//     }
-//     return false;
-// }
+    // Perform dilation or any other desired operation to thicken obstacles
+    int robot_radius = 3;
+    cv::Mat dilated_map;
 
-// auto GridPlanner::FilterGroundPoint(geometry_msgs::Point& origin_point) -> bool {
-//     bool is_ground = false;
-//     for (const auto& point_ptr : ground_cloud) {
-//         const auto& each = *point_ptr;
-//         if (InRange(each.x, origin_point.x, each.y, origin_point.y)) {
-//             is_ground = true;
-//             break;
-//         }
-//     }
-//     if (is_ground == false) {
-//         return false;
-//     }
-//     for (const auto& point_ptr : obstacle_cloud) {
-//         const auto& each = *point_ptr;
-//         if (InRange(each.x, origin_point.x, each.y, origin_point.y)) {
-//             return false;
-//         }
-//     }
-//     return true;
-// }
+    cv::Mat element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(2 * robot_radius + 1, 2 * robot_radius + 1));
+
+    /**
+     * @ref: https://docs.opencv.org/3.4/db/df6/tutorial_erosion_dilatation.html
+     *
+     * As the kernel B is scanned over the image, we compute the maximal pixel value overlapped by B and
+     *  replace the image pixel in the anchor point position with that maximal value.
+     */
+    cv::dilate(map_mat, dilated_map, element);
+    ROS_INFO_STREAM("dilated_map: " << dilated_map.rows << " x " << dilated_map.cols
+                                    << " with channels: " << dilated_map.channels());
+
+    // Convert back to std::vector<int8_t>
+    std::vector<int8_t> vector_map(dilated_map.data, dilated_map.data + dilated_map.total());
+    this->configuration_space_map = vector_map;
+
+    ROS_INFO_STREAM("OBSTACLES THICKENED. map size: " << this->map.size() << " -> "
+                                                      << this->configuration_space_map.size());
+
+    // cv::startWindowThread();
+    // cv::imshow("LiDAR Map before transformation", map_mat);
+    // cv::waitKey(0);
+    // cv::imshow("LiDAR Map after transformation", dilated_map);
+    // cv::waitKey(0);
+
+    bool success_dilated = cv::imwrite("/home/developer/dilated_map.png", dilated_map);
+    if (!success_dilated) {
+        int error_code = errno;
+        ROS_ERROR("Failed to write dilated_map.png. Error: %d - %s", error_code, strerror(error_code));
+    }
+
+    bool success_map = cv::imwrite("/home/developer/map_mat.png", map_mat);
+    if (!success_map) {
+        ROS_ERROR("Failed to write map_mat.png");
+    }
+}
 
 /**
  * @brief Updates the global cost map with the given occupancy grid and origin point.
@@ -182,24 +194,23 @@ void GridPlanner::GetMap(std::vector<int8_t>& map_data) {
 void GridPlanner::UpdateMap(const nav_msgs::OccupancyGrid& grid, geometry_msgs::Point& origin_point) {
     int x1 = std::floor(origin_point.x / map_resolution) - x_offset;
     int y1 = std::floor(origin_point.y / map_resolution) - y_offset;
+
     for (int i = 2; i < grid.info.width - 3; i++) {
         for (int j = 2; j < grid.info.height - 3; j++) {
             if (IsInMap(x1 + i, y1 + j)) {
                 int current_idx = GetMapIndex(x1 + i, y1 + j);
                 int grid_idx = GetGridMapIndex(i, j, (int)grid.info.height);
+
                 if (this->map[current_idx] == obstacle_cost / 2) {
                     this->map[current_idx] = (int8_t)grid.data.at(grid_idx);
-                } 
-                else {
+
+                } else {
                     if (grid.data.at(grid_idx) == obstacle_cost) {
                         this->map[current_idx] = (int8_t)grid.data.at(grid_idx);
                     }
+
                     // ROS_INFO_STREAM("grid.data.at(grid_idx): " << grid.data.at(grid_idx));
                     // ROS_INFO_STREAM("ground_occ_grid.data.at(grid_idx): " << ground_occ_grid.data.at(grid_idx));
-                    
-                    // if (grid.data.at(grid_idx) == 0 && ground_occ_grid.data.at(grid_idx) != 0) {
-                    //     this->map[current_idx] = (int8_t)grid.data.at(grid_idx);
-                    // }
 
                     if (grid.data.at(grid_idx) == 0 && ground_occ_grid.data.at(grid_idx) == 0) {
                         // ROS_INFO_STREAM("ground_occ_grid.data.at (x,y) " << x1 + i << ", " << y1 + j);
@@ -209,12 +220,11 @@ void GridPlanner::UpdateMap(const nav_msgs::OccupancyGrid& grid, geometry_msgs::
             }
         }
     }
+
+    ThickenObstacles(this->map);
 }
 
-void GridPlanner::UpdateMapBasedOnGround(const nav_msgs::OccupancyGrid& grid) {
-    ground_occ_grid = grid;
-}
-
+void GridPlanner::UpdateMapBasedOnGround(const nav_msgs::OccupancyGrid& grid) { ground_occ_grid = grid; }
 
 //============================ Waypoints Update Function ================================
 //============================
@@ -228,10 +238,13 @@ void GridPlanner::UpdateWaypoints(const geometry_msgs::PoseArray& waypoints) {
         ROS_WARN("NO WAYPOINTS TO UPDATE");
         return;
     }
+
     if (ros::Time::now().toSec() > dynamic_waypoints.header.stamp.toSec()) {
         dynamic_waypoints = waypoints;
         dynamic_waypoints.header.stamp = ros::Time::now();
+
         ROS_INFO("NEW INPUT WAYPOINTS UPDATED.");
+        return;
     }
 }
 
@@ -258,6 +271,7 @@ void GridPlanner::GetDynamicWaypoints(geometry_msgs::PoseArray& waypoints) { way
 auto GridPlanner::EstimateEuclideanDistance(int curr_x, int curr_y, int goal_x, int goal_y) -> float {
     int delta_x = abs(curr_x - goal_x);
     int delta_y = abs(curr_y - goal_y);
+
     return sqrt(delta_x * delta_x + delta_y * delta_y);
 }
 
