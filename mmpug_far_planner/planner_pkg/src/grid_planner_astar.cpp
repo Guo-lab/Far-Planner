@@ -28,7 +28,7 @@ auto GridPlanner::PlanWithAstar(const geometry_msgs::Pose& robot_pose, const geo
     if (start_node == goal_node ||
         EstimateEuclideanDistance(start_node.x, start_node.y, goal_node.x, goal_node.y) <= 13) {
         // waypoints tolerance
-        ROS_INFO("REACH ONE GOAL.");
+        // ROS_INFO("REACH ONE GOAL.");
         return 0;
     }
 

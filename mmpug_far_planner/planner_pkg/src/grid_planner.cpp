@@ -132,14 +132,14 @@ void GridPlanner::GetMap(std::vector<int8_t>& map_data) {
 void GridPlanner::ThickenObstacles(std::vector<int8_t, std::allocator<int8_t>>& map_data_to_thicken) {
     // this->configuration_space_map = map_data_to_thicken;
 
-    ROS_INFO("THICKENING OBSTACLES..");
+    // ROS_INFO("THICKENING OBSTACLES..");
 
     // CV_8S indicates the data type (8-bit signed integer)
     cv::Mat map_mat = cv::Mat(this->y_size, this->x_size, CV_8U, map_data_to_thicken.data()).clone();
-    ROS_INFO_STREAM("map_mat: " << map_mat.rows << " x " << map_mat.cols << " with channels: " << map_mat.channels());
+    // ROS_INFO_STREAM("map_mat: " << map_mat.rows << " x " << map_mat.cols << " with channels: " << map_mat.channels());
 
     // Perform dilation or any other desired operation to thicken obstacles
-    int robot_radius = 3;
+    int robot_radius = 2;
     cv::Mat dilated_map;
 
     cv::Mat element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(2 * robot_radius + 1, 2 * robot_radius + 1));
@@ -151,21 +151,15 @@ void GridPlanner::ThickenObstacles(std::vector<int8_t, std::allocator<int8_t>>& 
      *  replace the image pixel in the anchor point position with that maximal value.
      */
     cv::dilate(map_mat, dilated_map, element);
-    ROS_INFO_STREAM("dilated_map: " << dilated_map.rows << " x " << dilated_map.cols
-                                    << " with channels: " << dilated_map.channels());
+    // ROS_INFO_STREAM("dilated_map: " << dilated_map.rows << " x " << dilated_map.cols
+    //                                 << " with channels: " << dilated_map.channels());
 
     // Convert back to std::vector<int8_t>
     std::vector<int8_t> vector_map(dilated_map.data, dilated_map.data + dilated_map.total());
     this->configuration_space_map = vector_map;
 
-    ROS_INFO_STREAM("OBSTACLES THICKENED. map size: " << this->map.size() << " -> "
-                                                      << this->configuration_space_map.size());
-
-    // cv::startWindowThread();
-    // cv::imshow("LiDAR Map before transformation", map_mat);
-    // cv::waitKey(0);
-    // cv::imshow("LiDAR Map after transformation", dilated_map);
-    // cv::waitKey(0);
+    // ROS_INFO_STREAM("OBSTACLES THICKENED. map size: " << this->map.size() << " -> "
+    //                                                   << this->configuration_space_map.size());
 
     bool success_dilated = cv::imwrite("/home/developer/dilated_map.png", dilated_map);
     if (!success_dilated) {
