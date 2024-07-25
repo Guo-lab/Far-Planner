@@ -19,7 +19,7 @@ auto GridPlanner::PlanWithAstar(const geometry_msgs::Pose& robot_pose, const geo
         return -1;
     }
     if (abs(EstimateEuclideanDistance(start_node.x, start_node.y, goal_node.x, goal_node.y) - timer_distance) >= 1) {
-        plan_timer = ros::Time::now();
+        plan_timeout_timer = ros::Time::now();
     }
 
     timer_distance = EstimateEuclideanDistance(start_node.x, start_node.y, goal_node.x, goal_node.y);
@@ -28,7 +28,8 @@ auto GridPlanner::PlanWithAstar(const geometry_msgs::Pose& robot_pose, const geo
     if (start_node == goal_node ||
         EstimateEuclideanDistance(start_node.x, start_node.y, goal_node.x, goal_node.y) <= 8) {
         // waypoints tolerance
-        // ROS_INFO("REACH ONE GOAL.");
+        ROS_INFO("REACH ONE GOAL.");
+        
         return 0;
     }
 

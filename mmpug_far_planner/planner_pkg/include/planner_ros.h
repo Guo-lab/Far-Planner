@@ -5,8 +5,8 @@
 #include <nav_msgs/OccupancyGrid.h>
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
-#include <sensor_msgs/PointCloud2.h>
 #include <ros/ros.h>
+#include <sensor_msgs/PointCloud2.h>
 #include <std_msgs/Bool.h>
 #include <std_msgs/Float32.h>
 #include <std_msgs/Header.h>
@@ -14,13 +14,16 @@
 /**For Rviz visualization-specific data */
 #include <visualization_msgs/Marker.h>
 
-
-/**In the old architecture, it is required to use tf2 library
- *  to handle coordinate transformations between different coordinate frames.
+/**
+ * In the old architecture, it is required to use tf2 library to handle coordinate transformations between different
+ * coordinate frames.
+ *
  * The transform listener is used to listen to coordinate transformations broadcasted on the ROS network.
  * In the former implementation, lookupTransform() is also used to query the buffer the latest
  *  transform between global frame and local frame.
- * However, in the new architecture, the frame has been consistent, thus tf2 is no more needed.
+ *
+ *
+ * However, in the new architecture, the frames have been consistent, thus tf2 is no more needed.
  */
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
@@ -37,20 +40,29 @@
 
 #include "grid_planner.h"
 
+/**
+ * @brief Class representing a timer for the planner (specifically for replanning). Lower replanning frequency could
+ * mitigate the oscillating.
+ */
 class PlanTimer {
-    public:
-     PlanTimer() : start_time(ros::Time::now()) {}
-    
-     void Reset() { start_time = ros::Time::now(); }
-    
-     float GetDuration() { return (ros::Time::now() - start_time).toSec(); }
-    
-    private:
-     ros::Time start_time;
+   public:
+    PlanTimer() : start_time(ros::Time::now()) {}
+
+    void Reset() { start_time = ros::Time::now(); }
+
+    float GetDuration() { return (ros::Time::now() - start_time).toSec(); }
+
+   private:
+    ros::Time start_time;
 };
 
-
 /**
+ * =====================================================================================================================
+ *
+ *                                              FAR (Global) Planner Node Class
+ *
+ * =====================================================================================================================
+ *
  * @brief Class representing the Global (FAR) Planner Node.
  *
  * This class handles the global planning functionality of the robot.
@@ -79,31 +91,41 @@ class PlannerNode {
     ros::NodeHandle node_handler;
     ros::NodeHandle private_node_handler = ros::NodeHandle("~");
 
-    /* ROS Subscribers and Publishers. */
-
-    /**
+    /** -------------------------------------------------------------------------------------
+     *
+     *                      ROS Subscribers and Publishers.
+     *
+     * ---------------------------------------------------------------------------------------
+     *
      * @brief A subscriber object that receives messages from one ROS topic.
-     *  HandleWaypointsRequest is the callback function, used to get the local planner's
-     *  waypoints from the command interface.
+     *
+     *  HandleWaypointsRequest is the callback function, used to get the local planner's waypoints from the command
+     * interface.
      */
     ros::Subscriber waypoints_sub;
 
     /**
      * @brief A subscriber object subscribe the topic <>.
+     *
      *  HandleCurrentPose is the callback function, used to get the current pose of the robot.
      */
     ros::Subscriber current_pose_sub;
 
     /**
      * @brief A subscriber object that receives messages from one ROS topic.
-     *  CostmapCallback is the callback function, used to get the occupancy grid data
-     *  from the local planner's local cost map.
+     *
+     *  CostmapCallback is the callback function, used to get the occupancy grid data from the local planner's local
+     * cost map.
      */
     ros::Subscriber costmap_sub;
-    
+
+    /**
+     * @brief A subscriber object that receives messages from one ROS topic.
+     *
+     *  GroundCallback is the callback function, used to get the ground occupancy grid data from the local planner's
+     * ground map.
+     */
     ros::Subscriber ground_sub;
-    // ros::Subscriber ground_cloud_sub;
-    // ros::Subscriber obstacle_cloud_sub;
 
     /**
      * @brief A ROS publisher for publishing the global planner's plan messages.
@@ -112,7 +134,7 @@ class PlannerNode {
 
     /**
      * @brief A ROS publisher for publishing the global cost map.
-     *  This will be used to visualize the global cost map in Rviz.
+     *      This will be used to visualize the global cost map in Rviz.
      */
     ros::Publisher global_cost_map_publisher;
 
@@ -121,9 +143,17 @@ class PlannerNode {
      *  This will be used to visualize the path in Rviz.
      */
     ros::Publisher a_star_path_to_goal_publisher;
+
     ros::Publisher theta_star_path_to_goal_publisher;
 
     /**
+     * ---------------------------------------------------------------------------------------
+     *
+     *                                  Callback Functions
+     *
+     * ---------------------------------------------------------------------------------------
+     *
+     *
      * @brief Callback function for the costmap subscriber, updating the cost map used by the planner.
      *
      * This function is called when a new occupancy grid message is received.
@@ -133,24 +163,36 @@ class PlannerNode {
      */
     void CostmapCallback(const nav_msgs::OccupancyGrid::ConstPtr& msg);
 
+    /**
+     * @brief Callback function for the ground subscriber, be used to update the cost map used by the planner as well.
+     *
+     * @param msg The received ground occupancy grid message, aka, ground message.
+     */
     void GroundCallback(const nav_msgs::OccupancyGrid::ConstPtr& msg);
-
-    // void GroundCloudCallback(const sensor_msgs::PointCloud2::ConstPtr& msg);
-    // void ObstacleCloudCallback(const sensor_msgs::PointCloud2::ConstPtr& msg);
 
     /**
      * @brief Callback function for the planner request subscriber.
+     *
      * @param msg The received planner request message.
      */
     void HandleWaypointsRequest(const geometry_msgs::PoseArray::ConstPtr&);
 
     /**
      * @brief Callback function for the current pose subscriber.
+     *
      * @param msg The received current pose message.
      */
     void HandleCurrentPose(const nav_msgs::Odometry::ConstPtr&);
 
     /**
+     * ---------------------------------------------------------------------------------------
+     *
+     *                                  Planner Helper Functions
+     *
+     * ---------------------------------------------------------------------------------------
+     *
+     * @brief Initialize the planner node.
+     *
      * @brief Update the metadata of the global cost map to publish.
      */
     void ReloadGridMetadata();
@@ -163,28 +205,41 @@ class PlannerNode {
     auto ReplanTillGoal() -> bool;
 
     /**
-     * @brief The ROS rate for the planner node.
+     * ---------------------------------------------------------------------------------------
+     * 
+     *                                 Planner Node Parameters
+     * 
+     * ---------------------------------------------------------------------------------------
      */
-    float ros_rate;
-    /**
-     * @brief The global frame ID. Default is "global".
-     */
-    std::string global_frame_id;
+    float ros_rate;  // The ROS rate for the planner node.
+
+    std::string global_frame_id;  // The global frame ID. Default is "global".
+
     /**
      * @brief The flag to show whether the map has been initialized.
-     *  Default is false. Set to true when the cost map has been updated once.
+     *
+     * Default is false. Set to true when the cost map has been updated once.
      */
     bool initialized_map;
+
+    /**
+     * @brief The flag to show whether the planner is planning.
+     *
+     * Default is false. Set to true when the planner is planning. Set to false when the planner is not planning, or the
+     * planning done.
+     */
     bool planning;
 
     /**
      * @brief The map resolution.
      */
     float map_resolution;
+
     /**
      * @brief The map size. Default (x_size, y_size) := (1000, 1000)
      */
     int map_size;
+
     /**
      * @brief The minimum obstacle cost.
      *  Default is 100, which is also the occupancy probability to visualize the map cell.
@@ -197,6 +252,9 @@ class PlannerNode {
      */
     GridPlanner planner;
 
+    /**
+     * @brief replanning timer for the planner.
+     */
     PlanTimer plan_timer;
 
     /**
