@@ -2,7 +2,7 @@
  * @file grid_planner.cpp
  * @brief Grid planner class implementation
  * @author Siqi. Edward, Guo
- * @version 1.0
+ * @version 2.0
  * @date 2024
  */
 
@@ -21,7 +21,7 @@ GridPlanner::GridPlanner(int map_size, float map_resolution, int min_obs_cost)
     : x_size(map_size), y_size(map_size), map_resolution(map_resolution), obstacle_cost(min_obs_cost) {
     this->x_offset = -map_size / 2;
     this->y_offset = -map_size / 2;
-    this->curr_yaw = 90.0;
+    this->curr_yaw = 0.0;
 
     InitializeMap();
 }
@@ -44,6 +44,7 @@ GridPlanner::~GridPlanner() { ResetMap(); }
 void GridPlanner::ResetMap() {
     this->map.clear();
     this->configuration_space_map.clear();
+
     return;
 }
 
@@ -59,9 +60,11 @@ void GridPlanner::ResetMap() {
  */
 void GridPlanner::InitializeMap() {
     ResetMap();
+
     std::vector<int8_t> data(this->x_size * this->y_size);
     std::fill(data.begin(), data.end(), this->obstacle_cost / 2);
     this->map = data;
+
     return;
 }
 
@@ -86,10 +89,11 @@ auto GridPlanner::CheckPoseInMap(const geometry_msgs::Pose& pose, Node& node) ->
     node.y = pose.position.y / map_resolution - y_offset;
 
     if (IsInMap(node.x, node.y) == false) {
-        ROS_WARN("CANCELLING PLANNER BECAUSE POSE IS NOT IN THE GRID");
+        ROS_WARN("CANCELLING PLANNING BECAUSE POSE IS NOT IN THE GRID");
 
         return false;
     }
+
     return true;
 }
 
@@ -107,8 +111,6 @@ int GridPlanner::GetMapIndex(int x, int y) { return (y * y_size + x); }
  */
 int GridPlanner::GetGridMapIndex(int x, int y, int height) { return (y * height + x); }
 
-// inline int GridPlanner::GetMapIndex25D(int x, int y, float theta) { return (t * y_size * x_size + y * x_size + x); }
-
 /**
  * @brief Retrieves the map data.
  *
@@ -118,31 +120,26 @@ int GridPlanner::GetGridMapIndex(int x, int y, int height) { return (y * height 
  * @param map_data The vector to store the retrieved map.
  */
 void GridPlanner::GetMap(std::vector<int8_t>& map_data) {
-    // map_data = this->map;
     map_data = this->configuration_space_map;
 
     return;
 }
 
 /**
- * @brief Thicken the obstacles in the map.
+ * @brief Thicken the obstacles in the map. Convert Workspace To Configuration Space.
+ *  This function is used to thicken the obstacles in the map.
  *
- *     Convert Workspace To Configuration Space.
+ * @param map_data_to_thicken The map data to dilate.
+ * @return void
  */
 void GridPlanner::ThickenObstacles(std::vector<int8_t, std::allocator<int8_t>>& map_data_to_thicken) {
-    // this->configuration_space_map = map_data_to_thicken;
-
-    // ROS_INFO("THICKENING OBSTACLES..");
-
     // CV_8S indicates the data type (8-bit signed integer)
     cv::Mat map_mat = cv::Mat(this->y_size, this->x_size, CV_8U, map_data_to_thicken.data()).clone();
-    // ROS_INFO_STREAM("map_mat: " << map_mat.rows << " x " << map_mat.cols << " with channels: " << map_mat.channels());
 
     // Perform dilation or any other desired operation to thicken obstacles
-    int robot_radius = 2;
     cv::Mat dilated_map;
 
-    cv::Mat element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(2 * robot_radius + 1, 2 * robot_radius + 1));
+    cv::Mat element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(2 * robot_radius_ + 1, 2 * robot_radius_ + 1));
 
     /**
      * @ref: https://docs.opencv.org/3.4/db/df6/tutorial_erosion_dilatation.html
@@ -151,26 +148,12 @@ void GridPlanner::ThickenObstacles(std::vector<int8_t, std::allocator<int8_t>>& 
      *  replace the image pixel in the anchor point position with that maximal value.
      */
     cv::dilate(map_mat, dilated_map, element);
-    // ROS_INFO_STREAM("dilated_map: " << dilated_map.rows << " x " << dilated_map.cols
-    //                                 << " with channels: " << dilated_map.channels());
 
     // Convert back to std::vector<int8_t>
     std::vector<int8_t> vector_map(dilated_map.data, dilated_map.data + dilated_map.total());
     this->configuration_space_map = vector_map;
 
-    // ROS_INFO_STREAM("OBSTACLES THICKENED. map size: " << this->map.size() << " -> "
-    //                                                   << this->configuration_space_map.size());
-
-    bool success_dilated = cv::imwrite("/home/developer/dilated_map.png", dilated_map);
-    if (!success_dilated) {
-        int error_code = errno;
-        ROS_ERROR("Failed to write dilated_map.png. Error: %d - %s", error_code, strerror(error_code));
-    }
-
-    bool success_map = cv::imwrite("/home/developer/map_mat.png", map_mat);
-    if (!success_map) {
-        ROS_ERROR("Failed to write map_mat.png");
-    }
+    return;
 }
 
 /**
@@ -180,7 +163,7 @@ void GridPlanner::ThickenObstacles(std::vector<int8_t, std::allocator<int8_t>>& 
  * Each cell will be updated if it has not been updated before in terms of the local's map.
  * Then, the cell will only update the obstacle cost when there is an obstacle in it.
  *
- * For now the filtering function does not work well.
+ * In this way, the robot could avoid the dynamically obstacles in the map and reuse the space when the obstacles leave.
  *
  * @param grid The occupancy grid to update the map with.
  * @param origin_point The origin point in local planner's map, used to calculate the map coordinates.
@@ -195,11 +178,11 @@ void GridPlanner::UpdateMap(const nav_msgs::OccupancyGrid& grid, geometry_msgs::
                 int current_idx = GetMapIndex(x1 + i, y1 + j);
                 int grid_idx = GetGridMapIndex(i, j, (int)grid.info.height);
 
-                if (this->map[current_idx] == obstacle_cost / 2) {
+                if (this->map[current_idx] == this->obstacle_cost / 2) {
                     this->map[current_idx] = (int8_t)grid.data.at(grid_idx);
 
                 } else {
-                    if (grid.data.at(grid_idx) == obstacle_cost) {
+                    if (grid.data.at(grid_idx) == this->obstacle_cost) {
                         this->map[current_idx] = (int8_t)grid.data.at(grid_idx);
                     }
 
@@ -208,6 +191,7 @@ void GridPlanner::UpdateMap(const nav_msgs::OccupancyGrid& grid, geometry_msgs::
 
                     if (grid.data.at(grid_idx) == 0 && ground_occ_grid.data.at(grid_idx) == 0) {
                         // ROS_INFO_STREAM("ground_occ_grid.data.at (x,y) " << x1 + i << ", " << y1 + j);
+
                         this->map[current_idx] = (int8_t)grid.data.at(grid_idx);
                     }
                 }
@@ -216,20 +200,35 @@ void GridPlanner::UpdateMap(const nav_msgs::OccupancyGrid& grid, geometry_msgs::
     }
 
     ThickenObstacles(this->map);
+
+    return;
 }
 
-void GridPlanner::UpdateMapBasedOnGround(const nav_msgs::OccupancyGrid& grid) { ground_occ_grid = grid; }
+/**
+ * @brief Update the map based on the ground occupancy grid.
+ *  The Ground occupancy grid will be used for filtering out removed-obstacles and updating the cost map dynamically.
+ *
+ * @param grid The ground occupancy grid to update the map with. It consists of the ground points.
+ * @return void
+ */
+void GridPlanner::UpdateMapBasedOnGround(const nav_msgs::OccupancyGrid& grid) {
+    ground_occ_grid = grid;
+
+    return;
+}
 
 //============================ Waypoints Update Function ================================
 //============================
 /**
- * @brief Update the waypoints for the planner.
- *  The waypoints are the target poses to reach.
+ * @brief Update the waypoints for the planner. The waypoints are the target poses to reach.
+ *
  * @param waypoints The array of waypoints to update.
+ * @return void
  */
 void GridPlanner::UpdateWaypoints(const geometry_msgs::PoseArray& waypoints) {
     if (waypoints.poses.size() == 0) {
         ROS_WARN("NO WAYPOINTS TO UPDATE");
+
         return;
     }
 
@@ -238,23 +237,29 @@ void GridPlanner::UpdateWaypoints(const geometry_msgs::PoseArray& waypoints) {
         dynamic_waypoints.header.stamp = ros::Time::now();
 
         ROS_INFO("NEW INPUT WAYPOINTS UPDATED.");
+
         return;
     }
 }
 
 /**
- * @brief Get the dynamic waypoints for the planner.
- *  The dynamic waypoints are the target poses to reach.
+ * @brief Get the dynamic waypoints for the planner. The dynamic waypoints are the target poses to reach.
+ *
  * @param waypoints The array of waypoints to update.
+ * @return void
  */
-void GridPlanner::GetDynamicWaypoints(geometry_msgs::PoseArray& waypoints) { waypoints = dynamic_waypoints; }
+void GridPlanner::GetDynamicWaypoints(geometry_msgs::PoseArray& waypoints) {
+    waypoints = dynamic_waypoints;
+
+    return;
+}
 
 //============================ A* Searching Algorithm Helper Function ================================
 //============================
 /**
- * @brief Function to estimate the euclidean distance between two points
- *     formula: sqrt(dx^2 + dy^2)
- *  The Octile Distance dx+dy-min(dx, dy) deprecated in this version.
+ * @brief Function to estimate the euclidean distance between two points with the formula: sqrt(dx^2 + dy^2)
+ *
+ * The Octile Distance dx+dy-min(dx, dy) deprecated in this version.
  *
  * @param curr_x The x-coordinate of the current point.
  * @param curr_y The y-coordinate of the current point.
@@ -270,21 +275,24 @@ auto GridPlanner::EstimateEuclideanDistance(int curr_x, int curr_y, int goal_x, 
 }
 
 /**
- * @brief Set the cost of the A* node.
- *  The total cost is calculated by the formula f = g + h.
+ * @brief Set the cost of the A* node. The total cost is calculated by the formula f = g + h.
+ *
  * @param nodeptr The node to set the cost.
  * @param g The cost from the start node to the current node.
  * @param h The heuristic cost from the current node to the goal node.
+ * @return void
  */
 void GridPlanner::SetAstarCost(Nodeptr& nodeptr, float g, float h) {
     nodeptr->g = g;
     nodeptr->h = h;
     nodeptr->f = g + h;
+
+    return;
 }
 
 /**
- * @brief Calculate the angle between two poses.
- *  The angle is calculated by the formula atan2(y2 - y1, x2 - x1).
+ * @brief Calculate the angle between two poses. The angle is calculated by the formula atan2(y2 - y1, x2 - x1).
+ *
  * @param pose_1 The first pose node.
  * @param pose_2 The second pose node.
  * @return The angle between the two poses. The direction in this step.

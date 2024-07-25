@@ -6,6 +6,12 @@ using namespace std;
 /**
  * @brief Function to plan with Theta* Algorithm (Any-Angle Path Planning on Grids)
  *  A line-of-sight check (Bresenham's algorithm)
+ *
+ * @ref: "Theta*: Any-Angle Path Planning on Grids"
+ *
+ * @param start: the start end of the line to check
+ * @param end: the end end of the line to check
+ * @return bool: true if there is a line of sight between the two points, false otherwise
  */
 auto GridPlanner::LineOfSight(const Nodeptr& start, const Nodeptr& end) -> bool {
     /** Extract the point from Node */
@@ -23,10 +29,13 @@ auto GridPlanner::LineOfSight(const Nodeptr& start, const Nodeptr& end) -> bool 
     int err = dx - dy;
 
     for (int i = 0; i < max_iter_step; i++) {
-        // if (map[GetMapIndex(x0, y0)] >= obstacle_cost) return false; /** No line of sight */
-        if (configuration_space_map[GetMapIndex(x0, y0)] >= obstacle_cost) return false;
+        // if (map[GetMapIndex(x0, y0)] >= obstacle_cost) return false;
+        if (configuration_space_map[GetMapIndex(x0, y0)] >= obstacle_cost) return false; /** No line of sight */
 
-        if (x0 == x1 && y0 == y1) return true;
+        if (x0 == x1 && y0 == y1) {
+            return true;
+        }
+
         int e2 = 2 * err;
         if (e2 > -dy) err -= dy;
         if (e2 > -dy) x0 += sx;
@@ -44,7 +53,8 @@ auto GridPlanner::LineOfSight(const Nodeptr& start, const Nodeptr& end) -> bool 
  *          3: up           4: down
  *          5: right up     6: right        7: right down
  *
- *     yaw  0
+ *     yaw could be the nearest 45 degree orientation
+ *
  *      ----------------------------
  *      |   0    |    3   |    5   |
  *      |        |        |        |
@@ -55,9 +65,14 @@ auto GridPlanner::LineOfSight(const Nodeptr& start, const Nodeptr& end) -> bool 
  *      |   2    |    4   |    7   |
  *      |        |        |        |
  *      ----------------------------
+ *
+ * @param direction: the direction index
+ * @param yaw: the orientation of the vehicle (can be other angles which need to be checked if it's valid)
+ *
+ * @return bool: true if the direction is valid, false otherwise
  */
 auto GridPlanner::OrientationConstraint(int direction, int yaw) -> bool {
-    ROS_INFO_STREAM("Orientation Constraint with current yaw: " << this->curr_yaw);
+    // ROS_INFO_STREAM("Orientation Constraint with current yaw: " << this->curr_yaw);
 
     switch (yaw) {
         case 0:
@@ -81,6 +96,7 @@ auto GridPlanner::OrientationConstraint(int direction, int yaw) -> bool {
             ROS_WARN("Invalid orientation constraint");
             break;
     }
+
     return false;
 }
 
@@ -97,7 +113,12 @@ auto GridPlanner::OrientationConstraint(int direction, int yaw) -> bool {
  * @ref: https://www.sciencedirect.com/science/article/pii/S221491472200006X
  *
  * (1) convert the A* to Theta*
+ * (2) check the orientation constraint
  *
+ * @param robot_pose: the current pose of the robot
+ * @param target: the target pose
+ * @param plan: the planned path
+ * @return int: the length of the planned path
  */
 auto GridPlanner::PlanWithThetAstar(const geometry_msgs::Pose& robot_pose, const geometry_msgs::Pose& target,
                                     geometry_msgs::PoseArray& plan) -> int {
@@ -105,12 +126,12 @@ auto GridPlanner::PlanWithThetAstar(const geometry_msgs::Pose& robot_pose, const
         return -1;
     }
     if (abs(EstimateEuclideanDistance(start_node.x, start_node.y, goal_node.x, goal_node.y) - timer_distance) >= 1) {
-        plan_timer = ros::Time::now();
+        plan_timeout_timer = ros::Time::now();
     }
 
     timer_distance = EstimateEuclideanDistance(start_node.x, start_node.y, goal_node.x, goal_node.y);
     if (start_node == goal_node ||
-        EstimateEuclideanDistance(start_node.x, start_node.y, goal_node.x, goal_node.y) <= 13) {
+        EstimateEuclideanDistance(start_node.x, start_node.y, goal_node.x, goal_node.y) <= reach_goal_threshold_) {
         return 0;
     }
 
@@ -150,11 +171,9 @@ auto GridPlanner::PlanWithThetAstar(const geometry_msgs::Pose& robot_pose, const
                     expand = true;
                 }
 
+                /** 2.5 D */
                 if (expand) {
                     expand = OrientationConstraint(dir, this->curr_yaw);
-                    if (!expand) {
-                        ROS_INFO_STREAM("Orientation Constraint for direction: " << dir);
-                    }
                 }
 
                 if (expand && IsInMap(newx, newy)) {
@@ -173,25 +192,24 @@ auto GridPlanner::PlanWithThetAstar(const geometry_msgs::Pose& robot_pose, const
                          * if there's line of sight between curr_node->parent and successor
                          */
                         if (curr_node->parent != nullptr) {
-                            if (LineOfSight(curr_node->parent, successor)) {
-                                // ROS_INFO("=========== LINE OF SIGHT ===========");
-                                // If the map is guaranteed to be initialized as the same orientation as the vehicle
+                            /** simplified theta* */
 
+                            if (LineOfSight(curr_node->parent, successor)) {
+                                /**
+                                 * If the map is guaranteed to be initialized as the same orientation as the vehicle
+                                 */
                                 // Calculate the differences
                                 double dy = successor->y - curr_node->parent->y;
                                 double dx = successor->x - curr_node->parent->x;
-                                
+
                                 double theta = atan2(dy, dx);
                                 double theta_degrees = theta * (180.0 / M_PI);
-                                
+
                                 theta_degrees = std::round(theta_degrees / 45.0) * 45.0;
-                                
+
+                                /** 2.5 D */
                                 if (OrientationConstraint(dir, (int)theta_degrees)) {
-                                    
-                                    ROS_INFO_STREAM("theta* variant with orientation constraint works, this line orien: " << theta_degrees << " and vehicle orien: " << this->curr_yaw);
-                                    
                                     successor->parent = curr_node->parent;
-                                    
                                 }
                             }
                         }
@@ -212,8 +230,10 @@ auto GridPlanner::PlanWithThetAstar(const geometry_msgs::Pose& robot_pose, const
     if (!pathFound) {
         return -1;
     }
+
     if (pathFound) {
         ROS_INFO("BACKTRACKING..");
+
         path_length = 0;
         Nodeptr backtrackNode = closed_list.at(goal_key);
         while (backtrackNode->parent != NULL) {
@@ -221,6 +241,7 @@ auto GridPlanner::PlanWithThetAstar(const geometry_msgs::Pose& robot_pose, const
             wp.position.x = (backtrackNode->x + x_offset) * map_resolution;
             wp.position.y = (backtrackNode->y + y_offset) * map_resolution;
             wp.position.z = 0;
+
             if (path_length <= 1) {
                 best_path.poses.push_back(wp);
                 if (path_length == 0) {
@@ -233,12 +254,14 @@ auto GridPlanner::PlanWithThetAstar(const geometry_msgs::Pose& robot_pose, const
                 float curr_dir = CalculateAngle(last_waypoint_1, wp);
                 float distance = EstimateEuclideanDistance(last_waypoint_1.position.x, last_waypoint_1.position.y,
                                                            wp.position.x, wp.position.y);
+
                 if (abs(Wrap2PI(prev_dir - curr_dir)) > MIN_OFFSET_ANGLE || distance > MERGE_DISTANCE) {
                     best_path.poses.push_back(wp);
                     last_waypoint_2 = last_waypoint_1;
                     last_waypoint_1 = wp;
                 }
             }
+
             path_length++;
             backtrackNode = backtrackNode->parent;
         }
@@ -246,5 +269,6 @@ auto GridPlanner::PlanWithThetAstar(const geometry_msgs::Pose& robot_pose, const
         plan.poses = best_path.poses;
         std::reverse(plan.poses.begin(), plan.poses.end());
     }
+
     return path_length;
 }

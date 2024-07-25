@@ -10,11 +10,11 @@
 #include <nav_msgs/OccupancyGrid.h>
 #include <ros/ros.h>
 
-#include <image_transport/image_transport.h>
 #include <cv_bridge/cv_bridge.h>
+#include <image_transport/image_transport.h>
 #include <sensor_msgs/image_encodings.h>
-#include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
 
 #include <stdlib.h>
 #include <algorithm>
@@ -39,27 +39,37 @@ const int UP = -1;
 const int DOWN = 1;
 const int STAY = 0;
 
+const int reach_goal_threshold_ = 4;
+const int robot_radius_ = 2;
+
 /**
+ * =============================================================================================
+ *
+ *                                      Node Structure
+ *
+ * =============================================================================================
+ *
  * @brief Node structure for representing a state in the search algorithm.
  */
 struct Node {
     /**
-     * @brief Node fields.
-     *  key: The index of the node in the map.
-     *  x, y: The x, y coordinate of the node.
-     * 
+     * @brief Node fields.  key: The index of the node in the map.
+     *                      x, y: The x, y coordinate of the node.
+     */
+    int key, x, y, time;
+    /**
      *  g: The cost to reach the node, the cost of the path from the start node to the current node
+     *
      *  h: The heuristic cost to reach the goal from the node. It estimates the cost of the cheapest path from the
-     *      current node to the goal node. 
+     *      current node to the goal node.
+     *
      *  f: The total cost of the node. (g + h). Cost to determine which node to explore
      *      next. It prioritizes nodes with lower f values.
      */
-    int key, x, y, time;
     float g, h, f;
-    /** Orientation */
-    // float theta;
+
     /**
-     * @brief The parent node of the current node. This is a pointer.
+     * @brief The parent node of the current node, which is a shared pointer.
      */
     std::shared_ptr<Node> parent;
 
@@ -86,8 +96,7 @@ struct Node {
 };
 
 /**
- * @brief Less than operator for priority queue.
- *  A struct to compare the f values of two nodes.
+ * @brief Less than operator for priority queue. A struct to compare the f values of two nodes.
  *  Higher f-values have lower priority.
  */
 struct CompareFValues {
@@ -95,6 +104,12 @@ struct CompareFValues {
 };
 
 /**
+ * =============================================================================================
+ *
+ *                                          Typedefs
+ *
+ * =============================================================================================
+ *
  * @brief A shared pointer to a Node object.
  */
 typedef std::shared_ptr<Node> Nodeptr;
@@ -110,19 +125,19 @@ typedef std::unordered_map<int, Nodeptr> CLOSED_LIST;
 typedef std::priority_queue<Nodeptr, std::vector<Nodeptr>, CompareFValues> OPEN_LIST;
 
 /**
+ * =============================================================================================
+ *
+ *                                      Grid Planner Class
+ *
+ * =============================================================================================
+ *
  * @brief A class for the grid planner.
  */
 class GridPlanner {
    public:
-    ros::Time plan_timer;
+    ros::Time plan_timeout_timer;  // planner's timeout timer
 
-    double curr_yaw;
-
-    /**
-     * Point Clouds for filtering the ground and obstacles
-     */
-    // std::vector<std::shared_ptr<geometry_msgs::Point>> ground_cloud;
-    // std::vector<std::shared_ptr<geometry_msgs::Point>> obstacle_cloud;
+    double curr_yaw;  // current yaw angle of the robot, which is used for the orientation constraint
 
     /**
      * @brief Constructor creates a new GridPlanner.
@@ -157,7 +172,7 @@ class GridPlanner {
     void GetMap(std::vector<int8_t>& map_data);
 
     /**
-     * @brief Prints the information of the GridPlanner object.
+     * @brief Prints the information of the GridPlanner object. Used for debugging.
      */
     void PrintInfo();
 
@@ -174,15 +189,25 @@ class GridPlanner {
      * @param origin_point The origin point in local planner's map, used to calculate the map coordinates.
      */
     void UpdateMap(const nav_msgs::OccupancyGrid& grid, geometry_msgs::Point& origin_point);
-    
+
+    /**
+     * @brief Updates the ground occupancy grid.
+     */
     void UpdateMapBasedOnGround(const nav_msgs::OccupancyGrid& grid);
 
+    /**
+     * @brief Updates the dynamic waypoints from real-time input.
+     */
     void UpdateWaypoints(const geometry_msgs::PoseArray& waypoints);
-    
+
+    /**
+     * @brief Get the dynamic waypoints from the waypoints array in this planner.
+     */
     void GetDynamicWaypoints(geometry_msgs::PoseArray& waypoints);
 
     /**
      * Global Plannomg with A* searching algorithm
+     *
      * @param robot_pose The current pose of the robot.
      * @param target The target pose to reach.
      * @param plan The path to the target pose. Searching the global map to get this optimized path.
@@ -191,19 +216,25 @@ class GridPlanner {
     auto PlanWithAstar(const geometry_msgs::Pose& robot_pose, const geometry_msgs::Pose& target,
                        geometry_msgs::PoseArray& plan) -> int;
 
+    /**
+     * @brief Global Planning with Theta* searching algorithm.
+     *
+     */
     auto PlanWithThetAstar(const geometry_msgs::Pose& robot_pose, const geometry_msgs::Pose& target,
                            geometry_msgs::PoseArray& plan) -> int;
 
    private:
     /**
      * @brief The private fields of the global planner.
+     *
      *  x_size: The x size of the map.
      *  y_size: The y size of the map.
      *  x_offset: The x offset of the map.
-     *  y_offset: The y offset of the map.
-     *  max_steps: The maximum number of steps to search.
+     *  y_offset: The y offset of the map. (transformation between the world and map coordinates)
      */
-    int x_size, y_size, x_offset, y_offset, max_steps;
+    int x_size, y_size, x_offset, y_offset;
+
+    int max_steps;  // The maximum number of steps to search.
 
     /**
      *  map_resolution: The resolution of the map.
@@ -211,13 +242,14 @@ class GridPlanner {
      */
     float map_resolution, obstacle_cost;
 
+    /**
+     * @brief Searching directions in the 2D grid map.
+     */
     int dX[8] = {LEFT, LEFT, LEFT, STAY, STAY, RIGHT, RIGHT, RIGHT};
     int dY[8] = {UP, STAY, DOWN, UP, DOWN, UP, STAY, DOWN};
 
-
     /**
-     * @brief The start and goal nodes for the A* search algorithm.
-     *  Based on the `Node` structure.
+     * @brief The start and goal nodes for the A* search algorithm. Based on the `Node` structure.
      */
     Node start_node, goal_node;
 
@@ -226,23 +258,28 @@ class GridPlanner {
      */
     std::vector<int8_t, std::allocator<int8_t>> map;
 
+    /**
+     * @brief The map used by the grid planner. Dilated from the map.
+     */
     std::vector<int8_t, std::allocator<int8_t>> configuration_space_map;
-    
+
     /**
      * @brief The Dynamic Waypoints from real-time input
      */
     geometry_msgs::PoseArray dynamic_waypoints;
 
     /**
-     * @brief The timer distance to reset the plan timer.
+     * @brief The timer distance to reset the plan timer. This distance is used to find if the robot is still moving.
      */
     float timer_distance;
 
+    /**
+     * @brief The ground occupancy grid map. Formed with the ground cloud points.
+     */
     nav_msgs::OccupancyGrid ground_occ_grid;
 
     /**
-     * @brief Function to estimate the euclidean distance between two points
-     *  formula: sqrt(dx^2 + dy^2)
+     * @brief Function to estimate the euclidean distance between two points. formula: sqrt(dx^2 + dy^2)
      */
     auto EstimateEuclideanDistance(int curr_x, int curr_y, int goal_x, int goal_y) -> float;
 
@@ -251,7 +288,7 @@ class GridPlanner {
      *  This is also the Key in Closed list.
      */
     int GetMapIndex(int, int);
-    
+
     int GetGridMapIndex(int, int, int);
 
     /**
@@ -270,27 +307,55 @@ class GridPlanner {
      */
     auto IsInMap(int x, int y) -> bool;
 
+    /**
+     * @brief A function to check if the given pose is within the map boundaries.
+     */
     auto CheckPoseInMap(const geometry_msgs::Pose& pose, Node& node) -> bool;
-    
+
+    /**
+     * @brief A function to set the A* cost of the node.
+     */
     void SetAstarCost(Nodeptr& nodeptr, float g, float h);
-    
+
+    /**
+     * @brief A function to calculate the angle between two poses.
+     *
+     *  The angle is calculated based on the orientation of the two poses. Formula: atan2(y2 - y1, x2 - x1).
+     */
     auto CalculateAngle(const geometry_msgs::Pose& pose_1, const geometry_msgs::Pose& pose_2) -> float;
 
+    /**
+     * @brief A function for theta* search algorithm. It decides if there is a straight free-obstacle line between two
+     * nodes.
+     */
     auto LineOfSight(const Nodeptr& start, const Nodeptr& end) -> bool;
 
-    void ThickenObstacles(std::vector<int8_t, std::allocator<int8_t>> &map_data_to_thicken);
+    /**
+     * @brief A function to convert the workspace to the configuration space. Dilate the map with opencv.
+     */
+    void ThickenObstacles(std::vector<int8_t, std::allocator<int8_t>>& map_data_to_thicken);
 
+    /**
+     * @brief A function to check if the robot can move to the given direction. This is our 2.5D searching constraint.
+     *  Work in a way that filters out constrainted path in the process of searching expansion. 
+     * 
+     * This algorithm function could ensure the robot could get the plan with reasonable rotations in the path.
+     */
     auto OrientationConstraint(int direction, int yaw) -> bool;
 
     /**
-     * @brief A function to wrap the angle to [-PI, PI).
-     *  Mod the angle by 2 * PI, we have [0, 2 * M_PI).
-     *  Then, if the angle is greater than PI, we subtract 2 * PI.
-     *  If the angle is less than -PI, we add 2 * PI.
+     * @brief A function to wrap the angle to [-PI, PI). Clip the angle to a proper range.
+     *
+     *  Mod the angle by 2 * PI, we have [0, 2 * M_PI). Then, if the angle is greater than PI, we subtract 2 * PI. If
+     * the angle is less than -PI, we add 2 * PI.
+     *
+     * @param angle The angle to wrap.
+     * @return The wrapped angle.
      */
     inline float Wrap2PI(float angle) {
         angle = fmod(angle, 2 * M_PI);
         angle += angle >= M_PI ? -2 * M_PI : (angle < -M_PI ? 2 * M_PI : 0);
+
         return angle;
     }
 };

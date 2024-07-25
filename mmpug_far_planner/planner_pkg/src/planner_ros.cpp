@@ -3,12 +3,11 @@
  * @brief Planner ROS Node Implementation
  * @ref https://github.com/mmpug-archive/mmpug_far_planner/tree/ps/new_planner
  * @author Siqi. Edward, Guo
- * @version 1.0
+ * @version 2.0
  */
 
 #include "planner_ros.h"
 
-// ros::Time timer;
 geometry_msgs::PoseArray verify_waypoints;
 
 /**
@@ -35,7 +34,8 @@ PlannerNode::~PlannerNode() {}
 /**
  * Planner Node Run Function
  *  This function creates the subscribers and publishers, and runs the planner node.
- *  It subscribes to the local cost map data from local mapping lidar, the manual-set waypoints from the command
+ *
+ * It subscribes to the local cost map data from local mapping lidar, the manual-set waypoints from the command
  * interface, and the current pose of the robot from the odometry data. It also publishes the global cost map data and
  * the A*-path (to Rviz). The global cost map data is retrieved from the planner object. The OccupancyGrid message is
  * updated with the new map data and metadata and published.
@@ -68,15 +68,17 @@ void PlannerNode::Run() {
         if (initialized_map) {
             planner.GetMap(new_occ_grid.data);
             ReloadGridMetadata();
+
             global_cost_map_publisher.publish(new_occ_grid);
         }
 
         if (planning) {
             planning = ReplanTillGoal();
-            if (planning && ros::Time::now() - planner.plan_timer > ros::Duration(30)) {
+
+            if (planning && ros::Time::now() - planner.plan_timeout_timer > ros::Duration(30)) {
                 ROS_INFO("TIMEOUT. NO PATH FOUND.");
                 planning = false;
-                planner.plan_timer = ros::Time::now();
+                planner.plan_timeout_timer = ros::Time::now();
             }
         }
         ros::spinOnce();
@@ -90,45 +92,43 @@ auto PlannerNode::ReplanTillGoal() -> bool {
 
     if (waypoints.poses.size() == 0) {
         ROS_INFO("NO WAYPOINTS TO PLAN, PLAN TERMINATED");
-        planner.plan_timer = ros::Time::now();
+        planner.plan_timeout_timer = ros::Time::now();
         return false;
     }
 
+    geometry_msgs::Pose robot_pose = current_odom.pose.pose;
+    geometry_msgs::Pose first_waypoint = waypoints.poses[0];
     geometry_msgs::PoseArray a_star_plan;
     geometry_msgs::PoseArray theta_star_plan;
 
-    geometry_msgs::Pose robot_pose = current_odom.pose.pose;
-
-    // nav_msgs::Path path_to_goal;
     nav_msgs::Path a_star_path_to_goal;
     nav_msgs::Path theta_star_path_to_goal;
 
     ros::Time s1 = ros::Time::now();
 
-    int plan_length_from_current_pose_to_first_waypoint =
-        planner.PlanWithAstar(robot_pose, waypoints.poses[0], a_star_plan);
+    int plan_length_curr_pose_to_first_waypoint = planner.PlanWithAstar(robot_pose, first_waypoint, a_star_plan);
+    plan_length_curr_pose_to_first_waypoint = planner.PlanWithThetAstar(robot_pose, first_waypoint, theta_star_plan);
 
-    plan_length_from_current_pose_to_first_waypoint =
-        planner.PlanWithThetAstar(robot_pose, waypoints.poses[0], theta_star_plan);
-
-    if (plan_length_from_current_pose_to_first_waypoint <= 0) {
-        if (plan_length_from_current_pose_to_first_waypoint < 0) {
+    if (plan_length_curr_pose_to_first_waypoint <= 0) {
+        if (plan_length_curr_pose_to_first_waypoint < 0) {
             ROS_WARN("PLAN FAILED. NO PATH FOUND.");
-            planner.plan_timer = ros::Time::now();
+            planner.plan_timeout_timer = ros::Time::now();
+
             return false;
         }
 
         // ROS_INFO("REACH ONE WAYPOINT");
         geometry_msgs::PoseArray tmp_pose_array;
+
         planner.GetDynamicWaypoints(tmp_pose_array);
 
         int waypoints_size = tmp_pose_array.poses.size();
-
         tmp_pose_array.poses.erase(tmp_pose_array.poses.begin());
         ROS_ASSERT(waypoints_size - 1 == tmp_pose_array.poses.size());
-        planner.UpdateWaypoints(tmp_pose_array);
 
-        planner.plan_timer = ros::Time::now();
+        planner.UpdateWaypoints(tmp_pose_array);
+        planner.plan_timeout_timer = ros::Time::now();
+
         return true;
     }
 
@@ -138,6 +138,7 @@ auto PlannerNode::ReplanTillGoal() -> bool {
 
     a_star_plan.header.frame_id = global_frame_id;
     a_star_plan.header.stamp = ros::Time::now();
+
     theta_star_plan.header.frame_id = global_frame_id;
     theta_star_plan.header.stamp = ros::Time::now();
 
@@ -158,6 +159,7 @@ auto PlannerNode::ReplanTillGoal() -> bool {
 
     a_star_path_to_goal_publisher.publish(a_star_path_to_goal);
     theta_star_path_to_goal_publisher.publish(theta_star_path_to_goal);
+
     return true;
 }
 
@@ -174,8 +176,9 @@ void PlannerNode::CostmapCallback(const nav_msgs::OccupancyGrid::ConstPtr& msg) 
     // ROS_INFO_STREAM("Cost Map Origin: (" << origin_point.x << ", " << origin_point.y << ")");
 
     planner.UpdateMap(*msg, origin_point);
-
     initialized_map = true;
+
+    return;
 }
 
 void PlannerNode::GroundCallback(const nav_msgs::OccupancyGrid::ConstPtr& msg) {
@@ -183,13 +186,15 @@ void PlannerNode::GroundCallback(const nav_msgs::OccupancyGrid::ConstPtr& msg) {
 
     // ROS_INFO_STREAM("Ground Map Origin: (" << origin_point.x << ", " << origin_point.y << ")");
     planner.UpdateMapBasedOnGround(*msg);
+
+    return;
 }
 
 /**
- * PlannerNode HandleWaypointsRequest
- *  Receiving a series of waypoints from the command interface.
+ * PlannerNode HandleWaypointsRequest. Receiving a series of waypoints from the command interface.
+ *
  *  The planner will plan a path from the current pose to the next waypoint. This path will be store into a temporary
- * PoseArray. The PoseArrya will be appended to the final point by many pathes.
+ * PoseArray. The PoseArray will be appended to the final point by many pathes.
  */
 void PlannerNode::HandleWaypointsRequest(const geometry_msgs::PoseArray::ConstPtr& req) {
     // ROS_INFO("RECEIVED WAYPOINTS REQUEST...");
@@ -198,11 +203,16 @@ void PlannerNode::HandleWaypointsRequest(const geometry_msgs::PoseArray::ConstPt
     verify_waypoints = *req;
 
     planning = true;
-    planner.plan_timer = ros::Time::now();
+    planner.plan_timeout_timer = ros::Time::now();
+
+    return;
 }
 
 /**
  * @brief Round the yaw angle to the nearest 45 degrees.
+ *
+ * @param yaw The yaw angle to round. (rad)
+ * @return double The rounded yaw angle. (rad)
  */
 double RoundYawToNearestRay(double yaw) {
     // Convert radians to degrees
@@ -218,8 +228,9 @@ double RoundYawToNearestRay(double yaw) {
 /**
  * @brief Callback function for handling the current pose of the planner.
  *
- * This function is called whenever a new odometry message is received.
- * It updates the current_odom member variable with the received message.
+ * This function is called whenever a new odometry message is received. It updates the current_odom member variable with
+ * the received message.
+ *  For the purpose of 2,5 D planning, this function also process the yaw of the robot.
  *
  * @param msg The odometry message containing the current pose information.
  */
@@ -235,20 +246,14 @@ void PlannerNode::HandleCurrentPose(const nav_msgs::Odometry::ConstPtr& msg) {
     m.getRPY(roll, pitch, yaw);
 
     double yaw_deg = yaw * 180.0 / M_PI;
-
-    // ROS_INFO_STREAM("Quaternion: (" << ori.x << ", " << ori.y << ", " << ori.z << ", " << ori.w << ")");
-
-    // ROS_INFO_STREAM("Current Orientation: (" << roll << ", " << pitch << ", " << yaw << ")");
-    // ROS_INFO_STREAM("Yaw: " << yaw_deg << " degrees");
-
-    // ROS_INFO_STREAM("Rounded Yaw: " << RoundYawToNearestRay(yaw));
-
     planner.curr_yaw = RoundYawToNearestRay(yaw) * 180.0 / M_PI;
-    // ROS_INFO_STREAM("Rounded Yaw: " << planner.curr_yaw << " degrees");
+
+    return;
 }
 
 /**
  * @brief Update the metadata of the global cost map to publish.
+ *  
  *  Including - Header header - MapMetaData info.
  */
 void PlannerNode::ReloadGridMetadata() {
@@ -259,11 +264,14 @@ void PlannerNode::ReloadGridMetadata() {
     new_occ_grid.info.origin.position.x = -map_resolution * map_size / 2;
     new_occ_grid.info.origin.position.y = -map_resolution * map_size / 2;
     new_occ_grid.header.stamp = ros::Time::now();
+
+    return;
 }
 
 /**
  * @brief Update the path to the goal position for publisher.
  *  Just copy the pose array from the planner's final decision to the path message.
+ * 
  * @param path The path message to update.
  * @param plan The pose array from the planner's final decision.
  */
@@ -281,6 +289,8 @@ void PlannerNode::ReloadPathToGoal(nav_msgs::Path& path, const geometry_msgs::Po
         pose_stamped.pose = pose;
         path.poses.push_back(pose_stamped);
     }
+
+    return;
 }
 
 /**
@@ -298,5 +308,6 @@ int main(int argc, char** argv) {
     ros::init(argc, argv, "Landing Global Planner Node");
     PlannerNode node;
     node.Run();
+
     return 0;
 }
