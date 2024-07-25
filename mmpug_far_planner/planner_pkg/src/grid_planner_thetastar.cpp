@@ -1,3 +1,4 @@
+#include <cmath>
 #include "grid_planner.h"
 
 using namespace std;
@@ -37,53 +38,49 @@ auto GridPlanner::LineOfSight(const Nodeptr& start, const Nodeptr& end) -> bool 
 
 /**
  * @brief Function to filter expansion directions (Any-Angle Path Planning on Cells)
- *  During A* (variants) search, there are 8 directions.
+ *
+ * During A* (variants) search, there are 8 directions.
  *   index  0: left up      1: left         2: left down
  *          3: up           4: down
  *          5: right up     6: right        7: right down
+ *
  *     yaw  0
  *      ----------------------------
- *      |        |        |        |
- *      |        |        |        |
- *      ----------------------------
- *      |        |        |        |
+ *      |   0    |    3   |    5   |
  *      |        |        |        |
  *      ----------------------------
+ *      |   1    |        |    6   |
  *      |        |        |        |
+ *      ----------------------------
+ *      |   2    |    4   |    7   |
  *      |        |        |        |
  *      ----------------------------
  */
-auto GridPlanner::OrientationConstraint() -> bool {
-    ROS_INFO_STREAM("Orientation Constraint with current yaw: " << curr_yaw);
+auto GridPlanner::OrientationConstraint(int direction, int yaw) -> bool {
+    ROS_INFO_STREAM("Orientation Constraint with current yaw: " << this->curr_yaw);
 
-    // switch ((int)curr_yaw) {
-    //     case 0:
-    //         if (abs(dX[dir]) == 1 && dY[dir] == 0) return true;
-    //         break;
-    //     case 45:
-    //         if (dX[dir] == 1 && dY[dir] == -1) return true;
-    //         break;
-    //     case 90:
-    //         if (dX[dir] == 0 && abs(dY[dir]) == 1) return true;
-    //         break;
-    //     case 135:
-    //         if (dX[dir] == -1 && dY[dir] == -1) return true;
-    //         break;
-    //     case 180:
-    //         if (abs(dX[dir]) == 1 && dY[dir] == 0) return true;
-    //         break;
-    //     case 225:
-    //         if (dX[dir] == -1 && dY[dir] == 1) return true;
-    //         break;
-    //     case 270:
-    //         if (dX[dir] == 0 && abs(dY[dir]) == 1) return true;
-    //         break;
-    //     case 315:
-    //         if (dX[dir] == 1 && dY[dir] == 1) return true;
-    //         break;
-    //     default:
-    //         break;
-    // }
+    switch (yaw) {
+        case 0:
+        case 180:
+        case -180:
+            return direction == 0 || direction == 1 || direction == 2 || direction == 5 || direction == 6 ||
+                   direction == 7;
+        case 90:
+        case -90:
+            return direction == 0 || direction == 3 || direction == 5 || direction == 2 || direction == 4 ||
+                   direction == 7;
+        case 45:
+        case -135:
+            return direction == 1 || direction == 2 || direction == 3 || direction == 4 || direction == 5 ||
+                   direction == 6;
+        case -45:
+        case 135:
+            return direction == 0 || direction == 1 || direction == 3 || direction == 4 || direction == 6 ||
+                   direction == 7;
+        default:
+            ROS_WARN("Invalid orientation constraint");
+            break;
+    }
     return false;
 }
 
@@ -153,6 +150,13 @@ auto GridPlanner::PlanWithThetAstar(const geometry_msgs::Pose& robot_pose, const
                     expand = true;
                 }
 
+                if (expand) {
+                    expand = OrientationConstraint(dir, this->curr_yaw);
+                    if (!expand) {
+                        ROS_INFO_STREAM("Orientation Constraint for direction: " << dir);
+                    }
+                }
+
                 if (expand && IsInMap(newx, newy)) {
                     // int new_cost_from_map = (int)map[GetMapIndex(newx, newy)];
                     int new_cost_from_map = (int)configuration_space_map[GetMapIndex(newx, newy)];
@@ -164,11 +168,31 @@ auto GridPlanner::PlanWithThetAstar(const geometry_msgs::Pose& robot_pose, const
                         Nodeptr successor = std::make_shared<Node>(newx, newy);
                         successor->parent = curr_node;
 
-                        /** Theta* variant check: if there's line of sight between curr_node->parent and successor */
+                        /**
+                         * Theta* variant check:
+                         * if there's line of sight between curr_node->parent and successor
+                         */
                         if (curr_node->parent != nullptr) {
                             if (LineOfSight(curr_node->parent, successor)) {
                                 // ROS_INFO("=========== LINE OF SIGHT ===========");
-                                successor->parent = curr_node->parent;
+                                // If the map is guaranteed to be initialized as the same orientation as the vehicle
+
+                                // Calculate the differences
+                                double dy = successor->y - curr_node->parent->y;
+                                double dx = successor->x - curr_node->parent->x;
+                                
+                                double theta = atan2(dy, dx);
+                                double theta_degrees = theta * (180.0 / M_PI);
+                                
+                                theta_degrees = std::round(theta_degrees / 45.0) * 45.0;
+                                
+                                if (OrientationConstraint(dir, (int)theta_degrees)) {
+                                    
+                                    ROS_INFO_STREAM("theta* variant with orientation constraint works, this line orien: " << theta_degrees << " and vehicle orien: " << this->curr_yaw);
+                                    
+                                    successor->parent = curr_node->parent;
+                                    
+                                }
                             }
                         }
 

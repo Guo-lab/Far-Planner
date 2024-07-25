@@ -280,7 +280,7 @@ class GridPlanner {
 
     void ThickenObstacles(std::vector<int8_t, std::allocator<int8_t>> &map_data_to_thicken);
 
-    auto OrientationConstraint() -> bool;
+    auto OrientationConstraint(int direction, int yaw) -> bool;
 
     /**
      * @brief A function to wrap the angle to [-PI, PI).

@@ -73,7 +73,7 @@ void PlannerNode::Run() {
 
         if (planning) {
             planning = ReplanTillGoal();
-            if (planning && ros::Time::now() - planner.plan_timer > ros::Duration(10)) {
+            if (planning && ros::Time::now() - planner.plan_timer > ros::Duration(30)) {
                 ROS_INFO("TIMEOUT. NO PATH FOUND.");
                 planning = false;
                 planner.plan_timer = ros::Time::now();
@@ -118,11 +118,12 @@ auto PlannerNode::ReplanTillGoal() -> bool {
             return false;
         }
 
-        ROS_INFO("REACH ONE WAYPOINT");
+        // ROS_INFO("REACH ONE WAYPOINT");
         geometry_msgs::PoseArray tmp_pose_array;
         planner.GetDynamicWaypoints(tmp_pose_array);
 
         int waypoints_size = tmp_pose_array.poses.size();
+
         tmp_pose_array.poses.erase(tmp_pose_array.poses.begin());
         ROS_ASSERT(waypoints_size - 1 == tmp_pose_array.poses.size());
         planner.UpdateWaypoints(tmp_pose_array);
@@ -133,7 +134,7 @@ auto PlannerNode::ReplanTillGoal() -> bool {
 
     ros::Time s2 = ros::Time::now();
     ros::Duration d = s2 - s1;
-    ROS_INFO_STREAM("PLANNING ROUTINE COMPLETE. TIME TAKEN: " << d.toSec());
+    // ROS_INFO_STREAM("PLANNING ROUTINE COMPLETE. TIME TAKEN: " << d.toSec());
 
     a_star_plan.header.frame_id = global_frame_id;
     a_star_plan.header.stamp = ros::Time::now();
@@ -145,8 +146,12 @@ auto PlannerNode::ReplanTillGoal() -> bool {
         theta_star_plan.poses.push_back(waypoints.poses[i]);
     }
 
-    // plan_publisher.publish(a_star_plan);
-    plan_publisher.publish(theta_star_plan);
+    if (plan_timer.GetDuration() > 1.5) {
+        // plan_publisher.publish(a_star_plan);
+        plan_publisher.publish(theta_star_plan);
+
+        plan_timer.Reset();
+    }
 
     ReloadPathToGoal(a_star_path_to_goal, a_star_plan);
     ReloadPathToGoal(theta_star_path_to_goal, theta_star_plan);
@@ -187,7 +192,7 @@ void PlannerNode::GroundCallback(const nav_msgs::OccupancyGrid::ConstPtr& msg) {
  * PoseArray. The PoseArrya will be appended to the final point by many pathes.
  */
 void PlannerNode::HandleWaypointsRequest(const geometry_msgs::PoseArray::ConstPtr& req) {
-    ROS_INFO("RECEIVED WAYPOINTS REQUEST...");
+    // ROS_INFO("RECEIVED WAYPOINTS REQUEST...");
 
     planner.UpdateWaypoints(*req);
     verify_waypoints = *req;
@@ -231,15 +236,15 @@ void PlannerNode::HandleCurrentPose(const nav_msgs::Odometry::ConstPtr& msg) {
 
     double yaw_deg = yaw * 180.0 / M_PI;
 
-    ROS_INFO_STREAM("Quaternion: (" << ori.x << ", " << ori.y << ", " << ori.z << ", " << ori.w << ")");
+    // ROS_INFO_STREAM("Quaternion: (" << ori.x << ", " << ori.y << ", " << ori.z << ", " << ori.w << ")");
 
-    ROS_INFO_STREAM("Current Orientation: (" << roll << ", " << pitch << ", " << yaw << ")");
-    ROS_INFO_STREAM("Yaw: " << yaw_deg << " degrees");
+    // ROS_INFO_STREAM("Current Orientation: (" << roll << ", " << pitch << ", " << yaw << ")");
+    // ROS_INFO_STREAM("Yaw: " << yaw_deg << " degrees");
 
-    ROS_INFO_STREAM("Rounded Yaw: " << RoundYawToNearestRay(yaw));
+    // ROS_INFO_STREAM("Rounded Yaw: " << RoundYawToNearestRay(yaw));
 
     planner.curr_yaw = RoundYawToNearestRay(yaw) * 180.0 / M_PI;
-    ROS_INFO_STREAM("Rounded Yaw: " << planner.curr_yaw << " degrees");
+    // ROS_INFO_STREAM("Rounded Yaw: " << planner.curr_yaw << " degrees");
 }
 
 /**
