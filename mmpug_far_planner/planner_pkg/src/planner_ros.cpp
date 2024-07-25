@@ -73,7 +73,7 @@ void PlannerNode::Run() {
 
         if (planning) {
             planning = ReplanTillGoal();
-            if (planning && ros::Time::now() - planner.plan_timer > ros::Duration(10)) {
+            if (planning && ros::Time::now() - planner.plan_timer > ros::Duration(30)) {
                 ROS_INFO("TIMEOUT. NO PATH FOUND.");
                 planning = false;
                 planner.plan_timer = ros::Time::now();
@@ -123,6 +123,7 @@ auto PlannerNode::ReplanTillGoal() -> bool {
         planner.GetDynamicWaypoints(tmp_pose_array);
 
         int waypoints_size = tmp_pose_array.poses.size();
+
         tmp_pose_array.poses.erase(tmp_pose_array.poses.begin());
         ROS_ASSERT(waypoints_size - 1 == tmp_pose_array.poses.size());
         planner.UpdateWaypoints(tmp_pose_array);
@@ -145,8 +146,12 @@ auto PlannerNode::ReplanTillGoal() -> bool {
         theta_star_plan.poses.push_back(waypoints.poses[i]);
     }
 
-    plan_publisher.publish(a_star_plan);
-    // plan_publisher.publish(theta_star_plan);
+    if (plan_timer.GetDuration() > 1.5) {
+        // plan_publisher.publish(a_star_plan);
+        plan_publisher.publish(theta_star_plan);
+
+        plan_timer.Reset();
+    }
 
     ReloadPathToGoal(a_star_path_to_goal, a_star_plan);
     ReloadPathToGoal(theta_star_path_to_goal, theta_star_plan);

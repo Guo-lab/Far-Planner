@@ -37,6 +37,19 @@
 
 #include "grid_planner.h"
 
+class PlanTimer {
+    public:
+     PlanTimer() : start_time(ros::Time::now()) {}
+    
+     void Reset() { start_time = ros::Time::now(); }
+    
+     float GetDuration() { return (ros::Time::now() - start_time).toSec(); }
+    
+    private:
+     ros::Time start_time;
+};
+
+
 /**
  * @brief Class representing the Global (FAR) Planner Node.
  *
@@ -183,6 +196,8 @@ class PlannerNode {
      *  Defined in GRID_PLANNER_H.
      */
     GridPlanner planner;
+
+    PlanTimer plan_timer;
 
     /**
      * @brief Represents an occupancy grid map, which is the global cost map maintained by the FAR Planner
