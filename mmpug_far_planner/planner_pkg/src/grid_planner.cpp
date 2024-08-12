@@ -75,7 +75,12 @@ void GridPlanner::InitializeMap() {
  * @param y The y-coordinate.
  * @return True if the coordinates are within the map boundaries, false otherwise.
  */
-auto GridPlanner::IsInMap(int x, int y) -> bool { return (x >= 0 && x < x_size && y >= 0 && y < y_size); }
+auto GridPlanner::IsInMap(int x, int y) -> bool { 
+    if (x > 400 && y > 400) {
+        // ROS_INFO_STREAM("x: " << x << ", y: " << y);
+    }
+    return (x >= 0 && x < x_size && y >= 0 && y < y_size); 
+}
 
 /**
  * @brief Check if the given pose is in the map.
@@ -172,11 +177,13 @@ void GridPlanner::UpdateMap(const nav_msgs::OccupancyGrid& grid, geometry_msgs::
     int x1 = std::floor(origin_point.x / map_resolution) - x_offset;
     int y1 = std::floor(origin_point.y / map_resolution) - y_offset;
 
+    // ROS_INFO_STREAM("x1: " << x1 << ", y1: " << y1);
     for (int i = 2; i < grid.info.width - 3; i++) {
         for (int j = 2; j < grid.info.height - 3; j++) {
             if (IsInMap(x1 + i, y1 + j)) {
                 int current_idx = GetMapIndex(x1 + i, y1 + j);
                 int grid_idx = GetGridMapIndex(i, j, (int)grid.info.height);
+                // ROS_INFO_STREAM("this map: " <<  this->map.size() << " " << grid.data.size() << "  current_idx: " << current_idx << ", grid_idx: " << grid_idx);
 
                 if (this->map[current_idx] == this->obstacle_cost / 2) {
                     this->map[current_idx] = (int8_t)grid.data.at(grid_idx);
@@ -198,9 +205,9 @@ void GridPlanner::UpdateMap(const nav_msgs::OccupancyGrid& grid, geometry_msgs::
             }
         }
     }
-
+    // ROS_INFO("MAP 1 UPDATED.");
     ThickenObstacles(this->map);
-
+    // ROS_INFO("MAP 2 UPDATED.");
     return;
 }
 

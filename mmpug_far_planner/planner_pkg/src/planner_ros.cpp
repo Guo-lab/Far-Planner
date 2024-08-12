@@ -41,7 +41,7 @@ PlannerNode::~PlannerNode() {}
  * updated with the new map data and metadata and published.
  */
 void PlannerNode::Run() {
-    ROS_INFO("Global Planner Running");
+    // ROS_INFO("Global Planner Running");
 
     costmap_sub = node_handler.subscribe("cmu_rc1/local_mapping_lidar_node/voxel_grid/obstacle_map", 1,
                                          &PlannerNode::CostmapCallback, this);
@@ -52,6 +52,7 @@ void PlannerNode::Run() {
 
     ground_sub = node_handler.subscribe("cmu_rc1/local_mapping_lidar_node/voxel_grid/ground_observed_map", 1,
                                         &PlannerNode::GroundCallback, this);
+    ROS_INFO("Subscribers Created");
 
     plan_publisher = node_handler.advertise<geometry_msgs::PoseArray>("cmu_rc1/mux/goal_input", 1, true);
 
@@ -61,11 +62,15 @@ void PlannerNode::Run() {
     theta_star_path_to_goal_publisher =
         node_handler.advertise<nav_msgs::Path>("cmu_rc1/theta_star_path_to_goal", 1, true);
 
+    ROS_INFO("Publishers Created");
+
     ros::spinOnce();
     ros::Rate rate(ros_rate);
 
     while (ros::ok()) {
+        // ROS_INFO("Global Planner Running...");
         if (initialized_map) {
+            // ROS_INFO("PUBLISHING GLOBAL COST MAP...");
             planner.GetMap(new_occ_grid.data);
             ReloadGridMetadata();
 
@@ -74,7 +79,7 @@ void PlannerNode::Run() {
 
         if (planning) {
             planning = ReplanTillGoal();
-
+            // ROS_INFO("PLANNING...");
             if (planning && ros::Time::now() - planner.plan_timeout_timer > ros::Duration(30)) {
                 ROS_INFO("TIMEOUT. NO PATH FOUND.");
                 planning = false;
@@ -87,6 +92,7 @@ void PlannerNode::Run() {
 }
 
 auto PlannerNode::ReplanTillGoal() -> bool {
+    // ROS_INFO("REPLANNING...");
     geometry_msgs::PoseArray waypoints;
     planner.GetDynamicWaypoints(waypoints);
 
@@ -156,7 +162,7 @@ auto PlannerNode::ReplanTillGoal() -> bool {
 
     ReloadPathToGoal(a_star_path_to_goal, a_star_plan);
     ReloadPathToGoal(theta_star_path_to_goal, theta_star_plan);
-
+    
     a_star_path_to_goal_publisher.publish(a_star_path_to_goal);
     theta_star_path_to_goal_publisher.publish(theta_star_path_to_goal);
 
@@ -172,16 +178,19 @@ auto PlannerNode::ReplanTillGoal() -> bool {
  * @param msg The received occupancy grid message.
  */
 void PlannerNode::CostmapCallback(const nav_msgs::OccupancyGrid::ConstPtr& msg) {
+    // ROS_INFO("RECEIVED COST MAP...");
     geometry_msgs::Point origin_point = msg->info.origin.position;
     // ROS_INFO_STREAM("Cost Map Origin: (" << origin_point.x << ", " << origin_point.y << ")");
 
     planner.UpdateMap(*msg, origin_point);
+    // ROS_INFO("MAP UPDATED...");
     initialized_map = true;
 
     return;
 }
 
 void PlannerNode::GroundCallback(const nav_msgs::OccupancyGrid::ConstPtr& msg) {
+    // ROS_INFO("RECEIVED GROUND MAP...");
     geometry_msgs::Point origin_point = msg->info.origin.position;
 
     // ROS_INFO_STREAM("Ground Map Origin: (" << origin_point.x << ", " << origin_point.y << ")");
@@ -235,6 +244,7 @@ double RoundYawToNearestRay(double yaw) {
  * @param msg The odometry message containing the current pose information.
  */
 void PlannerNode::HandleCurrentPose(const nav_msgs::Odometry::ConstPtr& msg) {
+    // ROS_INFO("RECEIVED CURRENT POSE...");
     current_odom = *msg;
 
     geometry_msgs::Quaternion ori = current_odom.pose.pose.orientation;
@@ -276,6 +286,7 @@ void PlannerNode::ReloadGridMetadata() {
  * @param plan The pose array from the planner's final decision.
  */
 void PlannerNode::ReloadPathToGoal(nav_msgs::Path& path, const geometry_msgs::PoseArray& plan) {
+    // ROS_INFO("RELOADING PATH TO GOAL...");
     path.header = plan.header;
 
     geometry_msgs::PoseStamped robot_pose;
