@@ -39,8 +39,8 @@ const int UP = -1;
 const int DOWN = 1;
 const int STAY = 0;
 
-const int reach_goal_threshold_ = 4;
-const int robot_radius_ = 2;
+const int reach_goal_threshold_ = 12;
+const int robot_radius_ = 3.5;
 
 /**
  * =============================================================================================
